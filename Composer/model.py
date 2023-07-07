@@ -40,6 +40,7 @@ class ComposeNet(nn.Module):
     def forward(self, x):
         _, t = x.size()
 
+        assert t <= self._context_len, f"Cannot forward sequence of length {t}, block size is only {self._context_len}"
         # Array for positional embedding
         _pos = torch.arange(0, t, dtype=torch.long, device=self._device)
         embed = self.note_embedding(x)
