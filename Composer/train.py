@@ -10,8 +10,9 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
 class TrainPipeline: 
-    def __init__(self, train_loader, model, loss_fn, optimizer):
+    def __init__(self, train_loader, validation_loader, model, loss_fn, optimizer):
         self.train_loader = train_loader
+        self.validation_loader = validation_loader
         self.model = model
         self.loss_fn = loss_fn
         self.optimizer = optimizer
@@ -70,7 +71,7 @@ class TrainPipeline:
 
             # Disable gradient computation and reduce memory consumption.
             with torch.no_grad():
-                for i, vdata in enumerate(self.train_loader):
+                for i, vdata in enumerate(self.validation_loader):
                     voutputs, vgt = self.unpack_batch(vdata)
                     vloss = self.loss_fn(voutputs, vgt)
                     running_vloss += vloss
