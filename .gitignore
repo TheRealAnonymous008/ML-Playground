@@ -4,3 +4,5 @@
 *.wav
 *.csv
 *.0
+
+Composer/runs/*
