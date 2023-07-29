@@ -41,10 +41,8 @@ class MidiDataset(Dataset):
         note_slice = self.notes[idx // self._samples_per_track]
 
         # Sample based on an offset.
-        offset = np.random.randint(0, len(note_slice))
-        slice_length = np.random.randint(0, self.context_len)
-
-        notes = note_slice[offset: offset + slice_length]
+        offset = np.random.randint(0, len(note_slice) - self.context_len)
+        notes = note_slice[offset: offset + self.context_len]
 
         # Store counts
         count = len(notes) 

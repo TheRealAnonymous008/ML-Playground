@@ -162,7 +162,10 @@ def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
 
         for i in range(0, len(n)):
             if (len(n[i]) > 1): # Do not include entries with no notes.
-                df.loc[len(df.index)] = [mid.split('/')[-1], n[i], d[i], v[i]]
+                df.loc[len(df.index)] = [mid.split('/')[-1], 
+                                         n[i].tolist(), 
+                                         d[i].tolist(), 
+                                         v[i].tolist()]
 
     df.to_csv(file_name, index=False)
     return df
