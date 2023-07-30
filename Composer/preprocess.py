@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from tqdm import tqdm
+
 # Bundle all note events together based on their time offset from each other
 # Returns an array with dimensions (tracks, bundles per track)
 def bundle_events(track : mido.MidiTrack):
@@ -35,7 +37,7 @@ def bundle_events(track : mido.MidiTrack):
     return bundles
 
 # Augment track bundles by removing note off / velocity = 0 events. 
-def augment_track_bundles(track, verbose):
+def augment_track_bundles(track):
     aug = [[] for i in range(0, len(track))]
     time = 0
 
@@ -54,8 +56,6 @@ def augment_track_bundles(track, verbose):
                 info = state[event['note']]
 
                 if info == None: 
-                    if verbose:
-                        print("Poorly formatted key. Skipping")
                     continue 
                 
                 info['event']['duration'] = time - info['time']
@@ -89,8 +89,11 @@ def create_lists(track):
     for i, b in enumerate(track):
         current_time = b[0]['time']
 
-        # Add a rest node 
-        if i > 0: 
+        # Add a rest token
+        # THis is only applicable in situations where two consecutive events have a gap in between
+        # i.e., end of first (last_note_time) < start of second (current time)
+
+        if i > 0 and current_time - last_note_time > 0: 
             notes.append(VOCABULARY['REST'])
             durations.append(current_time - last_note_time)
             velocities.append(0)
@@ -119,15 +122,10 @@ def create_lists(track):
 def normalize_to_beats(track_arr, ticks_per_beat):
     return track_arr / ticks_per_beat
 
-def process_midi(path, verbose = False):
-    if verbose:
-        print("\"", path, "\"")
-        
+def process_midi(path):   
     try: 
         midi_file = mido.MidiFile(path)
-        print("Tracks: ", len(midi_file.tracks))
     except: 
-        print("Skipping corrupted file...")
         return None 
 
     track_notes = []
@@ -136,7 +134,7 @@ def process_midi(path, verbose = False):
 
     for _, track in enumerate(midi_file.tracks):
         track_bundles = bundle_events(track)
-        augmented_bundles = augment_track_bundles(track_bundles, verbose=verbose)
+        augmented_bundles = augment_track_bundles(track_bundles)
         notes, durations, velocities = create_lists(augmented_bundles)
 
         durations = normalize_to_beats(durations, midi_file.ticks_per_beat)
@@ -153,19 +151,26 @@ def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
 
     df = pd.DataFrame(columns=["name", "notes", "durations", "velocities"])
 
-    for mid in midis:
-        out = process_midi(mid, verbose)
-        if out is None: 
-            continue 
-        
-        n, d, v  = out
+    with tqdm(midis, unit="files") as tfiles:
+        for i, mid in enumerate(tfiles):
+            tfiles.set_description("Processing Files...")
 
-        for i in range(0, len(n)):
-            if (len(n[i]) > 1): # Do not include entries with no notes.
-                df.loc[len(df.index)] = [mid.split('/')[-1], 
-                                         n[i].tolist(), 
-                                         d[i].tolist(), 
-                                         v[i].tolist()]
+            out = process_midi(mid,)
+
+            tfiles.set_postfix_str(mid)
+
+            if out is None: 
+                tfiles.set_postfix_str(mid + "Skipping corrupted file...")
+                continue 
+            
+            n, d, v  = out
+
+            for i in range(0, len(n)):
+                if (len(n[i]) > 1): # Do not include entries with no notes.
+                    df.loc[len(df.index)] = [mid.split('/')[-1], 
+                                            n[i].tolist(), 
+                                            d[i].tolist(), 
+                                            v[i].tolist()]
 
     df.to_csv(file_name, index=False)
     return df
