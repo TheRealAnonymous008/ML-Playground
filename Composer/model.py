@@ -6,7 +6,7 @@ import torch
 
 class Config:
     def __init__(self):
-        self.context_len = 1024
+        self.context_len = 2048
 
         self.note_branch_layers = 4
         self.velocity_branch_layers = 4
@@ -68,7 +68,7 @@ class NoteComposeNet(nn.Module):
 
     # Dimensions of x are (Batches, Note Sequences)
     # Note Sequences MUST have size < context_len 
-    def forward(self, x_notes):
+    def forward(self, x_notes, temperature = 1.0):
         _, tn = x_notes.size()
         assert tn <= self._context_len, f"Cannot forward sequence of length {tn}, block size is only {self._context_len}"
         # Array for positionally embedded notes
@@ -83,13 +83,13 @@ class NoteComposeNet(nn.Module):
 
         # Get the next note
         y_notes = self.note_linear(y_notes[:, -1, :])
-        y_notes = torch.softmax(y_notes, 1)
+        y_notes = torch.softmax(y_notes / temperature, 1)
         # Return the next note
         return y_notes
 
     # Returns a number corresponding to the note generated.
     # Inputs are in array form
-    def generate(self, inputs, max_len = 10):
+    def generate(self, inputs, max_len = 10, temperature = 1.0):
         input_toks = inputs[:self._context_len]
         outputs = []
 
@@ -97,11 +97,11 @@ class NoteComposeNet(nn.Module):
             with torch.no_grad():
                 toks = torch.tensor([input_toks], device=self._device)
 
-                output_logits = self.forward(toks)
+                output_logits = self.forward(toks, temperature=temperature)
                 output_logits = output_logits.cpu().detach().numpy()
             
-            output_tok = output_logits[0].argmax()
-            outputs.append(output_tok)
+            output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
+            outputs.append(output_tok.item())
 
             input_toks = np.append(input_toks, output_tok)
             input_toks = input_toks[-self._context_len:]
@@ -110,8 +110,8 @@ class NoteComposeNet(nn.Module):
     
     def detokenize(self, inputs):
         detoks = []
-
+        keys = list(VOCABULARY.keys())
         for x in inputs:
-            print(VOCABULARY[int(x)])
+            detoks.append(keys[int(x)])
 
         return detoks

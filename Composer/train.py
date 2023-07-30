@@ -11,12 +11,15 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
 class TrainPipeline: 
-    def __init__(self, train_loader, validation_loader, model, loss_fn, optimizer):
+    def __init__(self, train_loader, validation_loader, model, loss_fn, optimizer, train_thresh = 10000):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.model = model
         self.loss_fn = loss_fn
         self.optimizer = optimizer
+
+        self.train_updates = 0
+        self.train_thresh = train_thresh
 
     def unpack_batch(self, batch):
         b, attn, gt = batch
@@ -54,6 +57,13 @@ class TrainPipeline:
                 tb_x = epoch_index * len(self.train_loader) + i + 1
                 tb_writer.add_scalar('Loss/train', last_loss, tb_x)
 
+                # Save intermediate checkpoints
+                self.train_updates += 1
+                if self.train_updates % self.train_thresh == 0:
+                    self.train_updates = 0
+                    model_path = 'checkpoints/temps/model'
+                    torch.save(self.model.state_dict(), model_path)
+                    
         return last_loss
     
     def train(self, epochs):
