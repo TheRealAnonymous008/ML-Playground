@@ -1,155 +1,121 @@
 from dataset import VOCABULARY
-import mido
+import pretty_midi as pm
 import numpy as np 
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
+import math 
+
+# Just to remove any warnings about pretty_midi. Please remove this when testing 
+import warnings
+warnings.filterwarnings("ignore")
 
 # Bundle all note events together based on their time offset from each other
-# Returns an array with dimensions (tracks, bundles per track)
-def bundle_events(track : mido.MidiTrack):
-    bundle = []
+# Returns an array with dimensions (instruments, bundles per instrument)
+def bundle_events(midi : pm.PrettyMIDI, instrument : pm.Instrument):
     bundles = []
-    for msg in track:
-        attrs = msg.dict()
-        type = attrs["type"]
-            
-        if type == 'note_on' or type == 'note_off':
-            if attrs['time'] == 0 or len(bundle) == 0:
-                bundle.append(attrs)
-            else:
-                # Ensure that the first entry in the list has the time stamp info
-                delta = bundle[0]['time']
-                # Sort each entry in each bundle based on the note (in ascending order) 
-                sorted_bundle = sorted(bundle, key=lambda x: int(x['note']))
+    i = 0
+    notes_list = sorted(instrument.notes, key=lambda x: x.start)
+    while i < len(notes_list):
+        bundle = []  
 
-                # Set all bundle entries to have time = 0 except for the first entry
-                for b in sorted_bundle:
-                    b['time'] = 0
-                sorted_bundle[0]['time'] = delta 
+        bnote :pm.Note = None   
+        while i < len(notes_list): 
+            note : pm.Note = notes_list[i]
 
-                bundles.append(sorted_bundle)
-
-                bundle.clear()
-                bundle.append(attrs)
-
-    return bundles
-
-# Augment track bundles by removing note off / velocity = 0 events. 
-def augment_track_bundles(track):
-    aug = [[] for i in range(0, len(track))]
-    time = 0
-
-    # entries are of the form
-    # note_id : {event, time_started, idx }
-    state = {}
-
-    # INitialize state 
-    for i in range(0, 128): 
-        state[i] = None
-
-    for i, bundle in enumerate(track): 
-        time += bundle[0]['time']
-        for event in bundle: 
-            if event['type'] == 'note_off' or event['velocity'] == 0:
-                info = state[event['note']]
-
-                if info == None: 
-                    continue 
-                
-                info['event']['duration'] = time - info['time']
-                info['event']['time'] = info['time']
-
-                if 'type' in info['event'].keys():
-                    del info['event']['type']
-
-                aug[info['idx']].append(info['event']) 
+            if len(bundle) == 0:
+                bundle.append(note)
+                bnote = note 
+            elif math.isclose(midi.time_to_tick(note.start), midi.time_to_tick(bnote.start), rel_tol=1e-5) and \
+                math.isclose(midi.time_to_tick(note.end), midi.time_to_tick(bnote.end), rel_tol=1e-5):
+                bundle.append(note)
             else: 
-                state[event['note']] = {'event': event, 'time': time, 'idx': i}
+                bundle = sorted(bundle, key = lambda x : x.pitch)
+                bundles.append(bundle)
+                break
+            i = i + 1
 
-    # Remove any empty entries
-    augmented = filter(lambda x : len(x) != 0, aug)
-
-    return augmented
+    bundles = sorted(bundles, key=lambda x: x[0].start)
+    return bundles
 
 # Convert bundles to a list of notes, durations and velocities. 
 # Each bundle note and velocity is separated from each other.
 # Each duration corresponds to the duration of the note
 # Each velocity is normalized to be between 0 and 1 (by dividing by 127)
 
-def create_lists(track):    
+def create_lists(instrument):    
     notes = []
     durations = []
     velocities = []
+    times = []
     
     current_time = 0
-    last_note_time = 0
 
-    for i, b in enumerate(track):
-        current_time = b[0]['time']
+    # Append beginning of sequence tok
+    notes.append(VOCABULARY['BOS'])
+    durations.append(0)
+    velocities.append(0)
+    times.append(0)
 
-        # Add a rest token
-        # THis is only applicable in situations where two consecutive events have a gap in between
-        # i.e., end of first (last_note_time) < start of second (current time)
-
-        if i > 0 and current_time - last_note_time > 0: 
-            notes.append(VOCABULARY['REST'])
-            durations.append(current_time - last_note_time)
-            velocities.append(0)
-
-        longest_duration = -1
+    for i, b in enumerate(instrument):
         for x in b: 
-            notes.append(x['note'])
-            durations.append(x['duration'])
-            velocities.append(int(x['velocity']))
-
-            longest_duration = max(longest_duration, x['duration'])
-
-        last_note_time = current_time + longest_duration
+            notes.append(x.pitch)
+            velocities.append(int(x.velocity))
 
         # Add the end of the last chord
         notes.append(VOCABULARY["SEP"])
-        durations.append(0)
+        durations.append(b[0].duration)  # Note: Every duration bounded by each SEP is assumed to be the same
         velocities.append(0)
+        times.append(b[0].start - current_time ) # Append the delta time
+        
+        current_time = b[0].start
 
     notes.append(VOCABULARY["EOS"])
     durations.append(0)
     velocities.append(0)
+    times.append(0)
 
-    return np.array(notes), np.array(durations), np.array(velocities)
+    return np.array(notes), np.array(durations), np.array(velocities), np.array(times)
 
-def normalize_to_beats(track_arr, ticks_per_beat):
-    return track_arr / ticks_per_beat
+def normalize_to_beats(instrument_arr, ticks_per_beat):
+    return np.round(instrument_arr / ticks_per_beat, 4)
 
 def process_midi(path):   
     try: 
-        midi_file = mido.MidiFile(path)
+        midi_file = pm.PrettyMIDI(path)
     except: 
         return None 
+    
+    midi_file.remove_invalid_notes()
 
-    track_notes = []
-    track_durations = []
-    track_velocities = []
+    instrument_notes = []
+    instrument_durations = []
+    instrument_velocities = []
+    instrument_times = []
+    instrument_names = []
 
-    for _, track in enumerate(midi_file.tracks):
-        track_bundles = bundle_events(track)
-        augmented_bundles = augment_track_bundles(track_bundles)
-        notes, durations, velocities = create_lists(augmented_bundles)
+    for _, instrument in enumerate(midi_file.instruments):
+        instrument_bundles = bundle_events(midi_file, instrument)
+        notes, durations, velocities, times = create_lists(instrument_bundles)
 
-        durations = normalize_to_beats(durations, midi_file.ticks_per_beat)
+        durations = normalize_to_beats(durations, 1.0 / midi_file.resolution)
+        times = normalize_to_beats(times, 1.0 / midi_file.resolution)
         
-        track_notes.append(notes)
-        track_durations.append(durations)
-        track_velocities.append(velocities)
+        instrument_notes.append(notes)
+        instrument_durations.append(durations)
+        instrument_velocities.append(velocities)
+        instrument_times.append(times)
+        instrument_names.append(instrument.program)
 
-    return np.array(track_notes, dtype=object), \
-        np.array(track_durations, dtype=object), \
-        np.array(track_velocities, dtype=object)
+    return np.array(instrument_notes, dtype=object), \
+        np.array(instrument_durations, dtype=object), \
+        np.array(instrument_velocities, dtype=object), \
+        np.array(instrument_times, dtype=object), \
+        np.array(instrument_names, dtype=object)
 
 def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
-
-    df = pd.DataFrame(columns=["name", "notes", "durations", "velocities"])
+    df = pd.DataFrame(columns=["name", "instrument", "notes", "durations", "velocities", "times"])
 
     with tqdm(midis, unit="files") as tfiles:
         for i, mid in enumerate(tfiles):
@@ -163,14 +129,16 @@ def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
                 tfiles.set_postfix_str(mid + "Skipping corrupted file...")
                 continue 
             
-            n, d, v  = out
+            n, d, v, t, inst  = out
 
             for i in range(0, len(n)):
                 if (len(n[i]) > 1): # Do not include entries with no notes.
                     df.loc[len(df.index)] = [mid.split('/')[-1], 
+                                            inst[i],
                                             n[i].tolist(), 
                                             d[i].tolist(), 
-                                            v[i].tolist()]
+                                            v[i].tolist(),
+                                            t[i].tolist()]
 
     df.to_csv(file_name, index=False)
     return df

@@ -11,6 +11,7 @@ NUM_MIDI_NOTES = 128
 # MASK - Mask Token for prediction. Acts as padding as well.
 
 VOCABULARY = { librosa.midi_to_note(i) : i  for i in range(0, NUM_MIDI_NOTES)}
+VOCABULARY["BOS"] = len(VOCABULARY)
 VOCABULARY["SEP"] = len(VOCABULARY)
 VOCABULARY["REST"] = len(VOCABULARY)
 VOCABULARY["EOS"] = len(VOCABULARY)
@@ -24,10 +25,15 @@ class MidiDataset(Dataset):
         df['notes'] = df.notes.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.isnumeric()])
         df['velocities'] = df.velocities.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.isnumeric()])
         df['durations'] = df.durations.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
+        df['times'] = df.times.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
+
+        # Instrument info
+        self.instruments = df['instrument']
 
         self.notes = df['notes']
         self.durations = df['durations']
         self.velocities = df['velocities']
+        self.times = df['times']
 
         self.context_len = context_len
 
