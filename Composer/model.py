@@ -86,14 +86,9 @@ class NoteComposeNet(nn.Module):
         outputs = []
 
         for i in range(0, max_len):
-            if i < self._context_len:
-                idx = i
-            else:
-                idx = -1
-
             toks = torch.tensor([input_toks], device=self._device)
 
-            output_logits = self.forward(toks, idx=idx, temperature=temperature)
+            output_logits = self.forward(toks, idx=-1, temperature=temperature)
             output_logits = output_logits.cpu().detach().numpy()
             
             output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
@@ -101,6 +96,8 @@ class NoteComposeNet(nn.Module):
 
             input_toks = np.append(input_toks, output_tok)
             input_toks = input_toks[-self._context_len:]
+
+            print(input_toks)
 
         return outputs
     
