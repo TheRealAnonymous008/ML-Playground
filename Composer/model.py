@@ -58,7 +58,7 @@ class NoteComposeNet(nn.Module):
 
     # Dimensions of x are (Batches, Note Sequences)
     # Note Sequences MUST have size < context_len 
-    def forward(self, x_notes, temperature = 1.0):
+    def forward(self, x_notes, idx = -1, temperature = 1.0):
         _, tn = x_notes.size()
         assert tn <= self._context_len, f"Cannot forward sequence of length {tn}, block size is only {self._context_len}"
         # Array for positionally embedded notes
@@ -72,7 +72,7 @@ class NoteComposeNet(nn.Module):
             y_notes = layer(y_notes, src_mask = self.causal_mask, is_causal = True)
 
         # Get the next note
-        y_notes = self.note_linear(y_notes[:, -1, :])
+        y_notes = self.note_linear(y_notes[:, idx, :])
 
         y_notes = torch.softmax(y_notes / temperature, 1)
         # Return the next note
@@ -85,12 +85,16 @@ class NoteComposeNet(nn.Module):
         input_toks = inputs[:self._context_len]
         outputs = []
 
-        for _ in range(0, max_len):
-            with torch.no_grad():
-                toks = torch.tensor([input_toks], device=self._device)
+        for i in range(0, max_len):
+            if i < self._context_len:
+                idx = i
+            else:
+                idx = -1
 
-                output_logits = self.forward(toks, temperature=temperature)
-                output_logits = output_logits.cpu().detach().numpy()
+            toks = torch.tensor([input_toks], device=self._device)
+
+            output_logits = self.forward(toks, idx=idx, temperature=temperature)
+            output_logits = output_logits.cpu().detach().numpy()
             
             output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
             outputs.append(output_tok.item())
