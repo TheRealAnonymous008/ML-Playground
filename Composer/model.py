@@ -8,7 +8,7 @@ class Config:
     def __init__(self):
         self.context_len = 2048
 
-        self.note_branch_layers = 4
+        self.note_branch_layers = 16
         self.velocity_branch_layers = 4
         self.duration_branch_layers = 4
         self.time_branch_layers = 4
@@ -29,16 +29,6 @@ class DiscreteEmbedding(nn.Module):
         embed = self.dropout(_pos + embed)
 
         return embed
-    
-class ContinuousEmbedding(nn.Module):
-    def __init__(self, context_len, dropout):
-        super(ContinuousEmbedding, self).__init__()
-        self.dropout = dropout
-    
-    def forward(self, x, _pos):
-        embed = self.dropout(x)
-
-        return embed
 
 class NoteComposeNet(nn.Module):
     def __init__(self, 
@@ -49,7 +39,7 @@ class NoteComposeNet(nn.Module):
         self.dropout = nn.Dropout(0.1)
         self.note_embedding = DiscreteEmbedding(config.context_len, config.note_embedding_dims, len(VOCABULARY), dropout=self.dropout)
 
-        self.causal_mask = nn.Transformer.generate_square_subsequent_mask(config.context_len)
+        self.causal_mask = nn.Transformer.generate_square_subsequent_mask(config.context_len, device=device)
         self.note_branch = [
             nn.TransformerEncoderLayer(
                 d_model=config.note_embedding_dims,
@@ -75,7 +65,7 @@ class NoteComposeNet(nn.Module):
         _pos = torch.arange(0, tn, dtype=torch.long, device=self._device)
 
         note_embed = self.note_embedding(x_notes, _pos)
-        y_notes = note_embed  
+        y_notes = note_embed 
 
         # Note branch
         for i, layer in enumerate(self.note_branch):
@@ -83,12 +73,14 @@ class NoteComposeNet(nn.Module):
 
         # Get the next note
         y_notes = self.note_linear(y_notes[:, -1, :])
+
         y_notes = torch.softmax(y_notes / temperature, 1)
         # Return the next note
         return y_notes
 
     # Returns a number corresponding to the note generated.
     # Inputs are in array form
+    @torch.no_grad()
     def generate(self, inputs, max_len = 10, temperature = 1.0):
         input_toks = inputs[:self._context_len]
         outputs = []

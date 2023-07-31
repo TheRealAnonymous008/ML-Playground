@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 import numpy as np
+import pandas as pd
 import librosa
 
 
@@ -13,7 +14,6 @@ NUM_MIDI_NOTES = 128
 VOCABULARY = { librosa.midi_to_note(i) : i  for i in range(0, NUM_MIDI_NOTES)}
 VOCABULARY["BOS"] = len(VOCABULARY)
 VOCABULARY["SEP"] = len(VOCABULARY)
-VOCABULARY["REST"] = len(VOCABULARY)
 VOCABULARY["EOS"] = len(VOCABULARY)
 VOCABULARY["MASK"] = len(VOCABULARY)
 
@@ -21,11 +21,13 @@ VOCABULARY["MASK"] = len(VOCABULARY)
 VELOCITY_VALUES = 128
 
 class MidiDataset(Dataset):
-    def __init__(self, df, context_len, samples_per_track = 16):
-        df['notes'] = df.notes.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.isnumeric()])
-        df['velocities'] = df.velocities.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.isnumeric()])
-        df['durations'] = df.durations.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
-        df['times'] = df.times.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(' ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
+    def __init__(self, df : pd.DataFrame, context_len, samples_per_track = 16, start_length = -1):
+        df = df.copy(deep=True) 
+
+        df['notes'] = df.notes.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.isnumeric()])
+        df['velocities'] = df.velocities.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.isnumeric()])
+        df['durations'] = df.durations.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
+        df['times'] = df.times.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
 
         # Instrument info
         self.instruments = df['instrument']
@@ -35,10 +37,13 @@ class MidiDataset(Dataset):
         self.velocities = df['velocities']
         self.times = df['times']
 
+        del df 
+
         self.context_len = context_len
 
         self._samples_per_track = samples_per_track
         self._data_points = len(self.notes)
+        self._start_length = -1
 
     def __len__(self):
         return self._data_points * self._samples_per_track
@@ -51,8 +56,10 @@ class MidiDataset(Dataset):
             offset = 0
         else: 
             offset = np.random.randint(0, len(note_slice) - self.context_len)
-            
+        
         notes = note_slice[offset: offset + self.context_len]
+        if self._start_length > 0:
+            notes = notes[:self._start_length]
 
         # Store counts
         count = len(notes) 
@@ -60,8 +67,7 @@ class MidiDataset(Dataset):
         # Perform padding
         # Note: Padding is necessary for batching. We specify an appropriate attention mask
         pad_toks = self.context_len - count
-        attn_mask = np.concatenate([np.array([float("-inf") for _ in range(0, count)]), 
-                                    np.zeros(pad_toks, np.float32)], dtype=np.float32)
+        attn_idx = count
 
         if pad_toks > 0:
             notes = np.pad(notes, 
@@ -85,11 +91,10 @@ class MidiDataset(Dataset):
         gt = {
             "notes": self.make_note_logit(gt_note)
         }
-        return sample, attn_mask, gt
+        return sample, attn_idx, gt
     
 
     def make_note_logit(self, note):
         logit = np.zeros(len(VOCABULARY))
         logit[note] = 1
         return logit
-        
