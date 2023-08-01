@@ -34,8 +34,7 @@ class TrainPipeline:
         notes_gt = gt['notes'].to(self.model._device)
         attn = attn.to(self.model._device)
 
-        with torch.autocast(self.model._device):
-            output_logits = self.model.forward(notes)
+        output_logits = self.model.forward(notes)
 
         return output_logits, notes_gt
 
@@ -48,9 +47,10 @@ class TrainPipeline:
 
                 self.optimizer.zero_grad()
 
-                output_logits, notes_gt = self.unpack_batch(batch)
-                
-                loss = self.loss_fn(output_logits, notes_gt)
+                with torch.autocast(self.model._device):
+                    output_logits, notes_gt = self.unpack_batch(batch)
+                    loss = self.loss_fn(output_logits, notes_gt)
+
                 loss.backward() 
 
                 self.optimizer.step()
@@ -81,14 +81,12 @@ class TrainPipeline:
         
         return last_loss
     
-    def train(self, epochs, start_length = -1):
+    def train(self, epochs):
         # Initializing in a separate cell so we can easily add more epochs to the same run
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         writer = SummaryWriter('runs/composer_{}'.format(timestamp))
 
         best_vloss = 1_000_000.
-
-        self.midi._start_length = start_length
 
         # Configure data loaders
         self.loader = DataLoader(

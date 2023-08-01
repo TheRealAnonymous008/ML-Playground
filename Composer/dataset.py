@@ -53,6 +53,10 @@ class MidiDataset(Dataset):
 
     def __getitem__(self, idx):
         note_slice = self.notes[idx // self._samples_per_track]
+        
+        # Data Augmentation technique: Transpose the notes
+        transpose_semitones = np.random.randint(-12, 13)  
+        note_slice = self.transpose(note_slice, transpose_semitones)
 
         length = np.random.randint(1, self._start_length)
 
@@ -85,6 +89,9 @@ class MidiDataset(Dataset):
                     constant_values=VOCABULARY['EOS']
                     )
 
+        # Perform augmentation via transposition
+
+
         # A sample taken from this slice
         sample = {
             "notes": notes
@@ -96,6 +103,14 @@ class MidiDataset(Dataset):
         }
         return sample, attn_idx, gt
     
+    def transpose(self, A, semitones):
+        L = A + semitones >= 0
+        H = A + semitones < 128 
+
+        M = A < NUM_MIDI_NOTES
+        M = A * M >= 0 
+
+        return (A + M * H * semitones) * L
 
     def make_note_logit(self, note):
         logit = np.zeros(len(VOCABULARY), dtype = np.float16)
