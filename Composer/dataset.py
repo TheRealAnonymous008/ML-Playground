@@ -58,7 +58,7 @@ class MidiDataset(Dataset):
 
         # Sample based on an offset.
         if len(note_slice) <= length:  # Case where ctx window is smaller than slice
-            offset = 0 
+            offset = np.random.randint(0, len(note_slice) - 1)
         else:  # Case where ctx window is >= slice
             offset = np.random.randint(0, len(note_slice) - length)
 

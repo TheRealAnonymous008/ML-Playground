@@ -56,8 +56,8 @@ class TrainPipeline:
                 self.optimizer.step()
                 
                 # Gather data and report
-                total_loss += loss.item()
-                last_loss = loss.item()
+                total_loss += loss.detach().item()
+                last_loss = loss.detach().item()
 
                 # Progress bar
                 tepoch.set_postfix({"train loss": f'{last_loss :.5f}'})
@@ -81,7 +81,7 @@ class TrainPipeline:
         
         return last_loss
     
-    def train(self, epochs, start_length = 16):
+    def train(self, epochs, start_length = -1):
         # Initializing in a separate cell so we can easily add more epochs to the same run
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         writer = SummaryWriter('runs/composer_{}'.format(timestamp))
