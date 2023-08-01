@@ -35,11 +35,13 @@ class NoteComposeNet(nn.Module):
         config: Config = Config(),
         device = "cuda", 
     ):
-        super(NoteComposeNet, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(0.1)
         self.note_embedding = DiscreteEmbedding(config.context_len, config.note_embedding_dims, len(VOCABULARY), dropout=self.dropout)
 
-        self.causal_mask = nn.Transformer.generate_square_subsequent_mask(config.context_len, device=device)
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(config.context_len, device=device)
+        self.register_buffer("causal_mask", causal_mask)
+        
         self.note_branch = [
             nn.TransformerEncoderLayer(
                 d_model=config.note_embedding_dims,
@@ -58,7 +60,7 @@ class NoteComposeNet(nn.Module):
 
     # Dimensions of x are (Batches, Note Sequences)
     # Note Sequences MUST have size < context_len 
-    def forward(self, x_notes, idx = -1, temperature = 1.0):
+    def forward(self, x_notes, temperature = 1.0):
         _, tn = x_notes.size()
         assert tn <= self._context_len, f"Cannot forward sequence of length {tn}, block size is only {self._context_len}"
         # Array for positionally embedded notes
@@ -69,10 +71,10 @@ class NoteComposeNet(nn.Module):
 
         # Note branch
         for i, layer in enumerate(self.note_branch):
-            y_notes = layer(y_notes, src_mask = self.causal_mask, is_causal = True)
+            y_notes = layer(y_notes, src_mask = self._buffers['causal_mask'], is_causal = True)
 
         # Get the next note
-        y_notes = self.note_linear(y_notes[:, idx, :])
+        y_notes = self.note_linear(y_notes[:, -1, :])
 
         y_notes = torch.softmax(y_notes / temperature, 1)
         # Return the next note
@@ -88,7 +90,7 @@ class NoteComposeNet(nn.Module):
         for i in range(0, max_len):
             toks = torch.tensor([input_toks], device=self._device)
 
-            output_logits = self.forward(toks, idx=-1, temperature=temperature)
+            output_logits = self.forward(toks, temperature=temperature)
             output_logits = output_logits.cpu().detach().numpy()
             
             output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
@@ -96,8 +98,6 @@ class NoteComposeNet(nn.Module):
 
             input_toks = np.append(input_toks, output_tok)
             input_toks = input_toks[-self._context_len:]
-
-            print(input_toks)
 
         return outputs
     

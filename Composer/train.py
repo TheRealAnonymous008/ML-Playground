@@ -13,9 +13,8 @@ from datetime import datetime
 import dataset
 
 class TrainPipeline: 
-    def __init__(self, train_midi : MidiDataset , vali_midi : MidiDataset, model, loss_fn, optimizer, validate = True, batch_size = 32, train_thresh = 2000):
-        self.train_midi = train_midi
-        self.vali_midi = vali_midi
+    def __init__(self, midi: MidiDataset, model, loss_fn, optimizer, validate = True, batch_size = 32, train_thresh = 1000):
+        self.midi = midi
         self.model = model
         self.loss_fn = loss_fn
         self.optimizer = optimizer
@@ -26,8 +25,7 @@ class TrainPipeline:
         self.validate = validate
         self.batch_size = batch_size
 
-        self.train_loader = None 
-        self.vali_loader = None
+        self.loader = None 
 
     def unpack_batch(self, batch):
         b, attn, gt = batch
@@ -36,19 +34,20 @@ class TrainPipeline:
         notes_gt = gt['notes'].to(self.model._device)
         attn = attn.to(self.model._device)
 
-        output_logits = self.model.forward(notes)
+        with torch.autocast(self.model._device):
+            output_logits = self.model.forward(notes)
 
         return output_logits, notes_gt
 
     def train_one_epoch(self, epoch_index, tb_writer):
         total_loss = 0
 
-        with tqdm(self.train_loader, unit="batch") as tepoch:
+        with tqdm(self.loader, unit="batch") as tepoch:
             for i, batch in enumerate(tepoch):
                 tepoch.set_description(f"Epoch {epoch_index + 1}")
 
                 self.optimizer.zero_grad()
-                
+
                 output_logits, notes_gt = self.unpack_batch(batch)
                 
                 loss = self.loss_fn(output_logits, notes_gt)
@@ -70,7 +69,7 @@ class TrainPipeline:
                     self.train_updates = 0
                     
                     # Tensorboard scalars
-                    tb_x = epoch_index * len(self.train_loader) + i + 1
+                    tb_x = epoch_index * len(self.loader) + i + 1
                     tb_writer.add_scalar('Loss/train', last_loss, tb_x)
 
                     # Save temporary model instance
@@ -89,28 +88,26 @@ class TrainPipeline:
 
         best_vloss = 1_000_000.
 
-        self.train_midi._start_length = start_length
-        self.vali_midi._start_length = start_length
+        self.midi._start_length = start_length
+
+        # Configure data loaders
+        self.loader = DataLoader(
+            self.midi, 
+            batch_size=self.batch_size,
+            num_workers=2,
+            shuffle=True, 
+            pin_memory=True,
+            pin_memory_device= self.model._device
+        )
 
         for epoch_number in range(epochs):
-            # Configure data loaders
-            self.train_loader = DataLoader(
-                self.train_midi, 
-                batch_size=self.batch_size,
-                num_workers=4,
-                shuffle=True, 
-            )
-            self.validation_loader = DataLoader(
-                self.vali_midi, 
-                batch_size=self.batch_size,
-                num_workers=4,
-                shuffle=True
-            )
-
             # Make sure gradient tracking is on, and do a pass over the data
             self.model.train(True)
+            self.midi.set_training()
             avg_loss = self.train_one_epoch(epoch_number, writer)
 
+
+            self.midi.set_validation()
             if self.validate:
                 running_vloss = 0.0
                 # Set the model to evaluation mode, disabling dropout and using population
@@ -119,13 +116,13 @@ class TrainPipeline:
 
                 # Disable gradient computation and reduce memory consumption.
                 with torch.no_grad():
-                    with tqdm(self.validation_loader, unit="batch") as tepoch:
+                    with tqdm(self.loader, unit="batch") as tepoch:
                         for i, vdata in enumerate(tepoch):
                             tepoch.set_description(f"Epoch {epoch_number + 1}")
                             voutputs, vgt = self.unpack_batch(vdata)
 
                             vloss = self.loss_fn(voutputs, vgt)
-                            running_vloss += vloss.item()
+                            running_vloss += vloss.detach().item()
                             avg_vloss = running_vloss / (i + 1)
 
                             tepoch.set_postfix({"val loss": f'{avg_vloss:.5f}'})
