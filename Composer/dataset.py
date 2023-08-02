@@ -104,9 +104,9 @@ class MidiDataset(Dataset):
         return (A + M * H * semitones) * L
 
     def make_note_logit(self, note):
-        logit = np.zeros(len(VOCABULARY), dtype = np.float16)
+        logit = np.zeros(len(VOCABULARY), dtype = float)
         logit[note] = 1.0
-        return logit
+        return logit.astype(float)
     
     def set_training(self):
         self._samples_per_track = self._train_samples
