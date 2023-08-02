@@ -132,7 +132,7 @@ def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
             n, d, v, t, inst  = out
 
             for i in range(0, len(n)):
-                if (len(n[i]) > 2): # Do not include entries with no notes.
+                if (len(n[i]) > 10): # Do not include entries with less than this many notes
                     df.loc[len(df.index)] = [mid.split('/')[-1], 
                                             inst[i],
                                             n[i].tolist(), 
