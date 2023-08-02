@@ -58,18 +58,9 @@ class MidiDataset(Dataset):
         transpose_semitones = np.random.randint(-12, 13)  
         note_slice = self.transpose(note_slice, transpose_semitones)
 
-        length = np.random.randint(1, self._start_length)
-
-        # Sample based on an offset.
-        if len(note_slice) <= length:  # Case where ctx window is smaller than slice
-            offset = np.random.randint(0, len(note_slice) - 1)
-        else:  # Case where ctx window is >= slice
-            offset = np.random.randint(0, len(note_slice) - length)
-
-        if offset + length < len(note_slice):
-            gt_note = note_slice[offset + length]
-        else:
-            gt_note = VOCABULARY['EOS']
+        length = np.random.randint(1, min(self._start_length, len(note_slice) - 1))
+        offset = np.random.randint(0, len(note_slice) - length)
+        gt_note = note_slice[offset + length]
         
         notes = note_slice[offset: offset + length]
         notes = notes[:length]
@@ -89,8 +80,6 @@ class MidiDataset(Dataset):
                     constant_values=VOCABULARY['EOS']
                     )
 
-        # Perform augmentation via transposition
-
 
         # A sample taken from this slice
         sample = {
@@ -103,9 +92,11 @@ class MidiDataset(Dataset):
         }
         return sample, attn_idx, gt
     
-    def transpose(self, A, semitones):
+    # Transposes the notes by shifting up a semitone. This makes the model more invariant to key signatures.
+    def transpose(self, notes, semitones):
+        A = np.array(notes)
         L = A + semitones >= 0
-        H = A + semitones < 128 
+        H = A + semitones < NUM_MIDI_NOTES 
 
         M = A < NUM_MIDI_NOTES
         M = A * M >= 0 

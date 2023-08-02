@@ -45,8 +45,6 @@ class TrainPipeline:
             for i, batch in enumerate(tepoch):
                 tepoch.set_description(f"Epoch {epoch_index + 1}")
 
-                self.optimizer.zero_grad()
-
                 with torch.autocast(self.model._device):
                     output_logits, notes_gt = self.unpack_batch(batch)
                     loss = self.loss_fn(output_logits, notes_gt)
@@ -54,6 +52,7 @@ class TrainPipeline:
                 loss.backward() 
 
                 self.optimizer.step()
+                self.optimizer.zero_grad()
                 
                 # Gather data and report
                 total_loss += loss.detach().item()
