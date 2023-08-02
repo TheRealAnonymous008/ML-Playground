@@ -47,6 +47,7 @@ class NoteComposeNet(nn.Module):
                 d_model=config.note_embedding_dims,
                 nhead=8,
                 dim_feedforward=16, 
+                activation= torch.nn.functional.gelu,
                 device = device
             ) 
             for _ in range(0, config.note_branch_layers)
@@ -60,7 +61,7 @@ class NoteComposeNet(nn.Module):
 
     # Dimensions of x are (Batches, Note Sequences)
     # Note Sequences MUST have size < context_len 
-    def forward(self, x_notes, temperature = 1.0):
+    def forward(self, x_notes):
         _, tn = x_notes.size()
         assert tn <= self._context_len, f"Cannot forward sequence of length {tn}, block size is only {self._context_len}"
         # Array for positionally embedded notes
@@ -76,7 +77,6 @@ class NoteComposeNet(nn.Module):
         # Get the next note
         y_notes = self.note_linear(y_notes[:, -1, :])
 
-        y_notes = torch.softmax(y_notes / temperature, 1)
         # Return the next note
         return y_notes
 
@@ -92,6 +92,8 @@ class NoteComposeNet(nn.Module):
 
             output_logits = self.forward(toks, temperature=temperature)
             output_logits = output_logits.cpu().detach().numpy()
+            
+            output_logits = torch.softmax(output_logits / temperature, 1)
             
             output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
             outputs.append(output_tok.item())
