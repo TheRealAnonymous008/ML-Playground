@@ -13,7 +13,10 @@ from datetime import datetime
 import dataset
 
 class TrainPipeline: 
-    def __init__(self, midi: MidiDataset, model, loss_fn, optimizer, validate = True, batch_size = 32, train_thresh = 1000):
+    def __init__(self, midi: MidiDataset, 
+                 model, loss_fn, optimizer, 
+                 validate = True, batch_size = 32, 
+                 train_thresh = 1000, scheduler = None):
         self.midi = midi
         self.model = model
         self.loss_fn = loss_fn
@@ -26,6 +29,7 @@ class TrainPipeline:
         self.batch_size = batch_size
 
         self.loader = None 
+        self.scheduler : torch.optim.lr_scheduler._LRScheduler = scheduler
 
     def unpack_batch(self, batch):
         b, attn, gt = batch
@@ -103,7 +107,8 @@ class TrainPipeline:
             self.midi.set_training()
             avg_loss = self.train_one_epoch(epoch_number, writer)
 
-
+            if self.scheduler is not None: 
+                self.scheduler.step()
             self.midi.set_validation()
             if self.validate:
                 running_vloss = 0.0
