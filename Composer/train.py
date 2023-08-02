@@ -58,16 +58,18 @@ class TrainPipeline:
 
                 loss /= self.grad_acc
                 loss.backward() 
+                # Gather data and report
+                last_loss += loss.detach().item()
 
                 # Perform gradient accumulation
-                if (epoch_index + 1) % self.grad_acc == 0 or epoch_index + 1 == total_batches:
-                    # Gather data and report
-                    last_loss = loss.detach().item()
+                if (self.train_updates + 1) % self.grad_acc == 0 or self.train_updates + 1 == total_batches:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
-                # Progress bar
-                tepoch.set_postfix({"train loss": f'{last_loss :.5f}'})
+                    # Progress bar
+                    tepoch.set_postfix({"train loss": f'{last_loss :.5f}'})
+
+                    last_loss = 0
 
                 # Save intermediate checkpoints
                 self.train_updates += 1
