@@ -16,7 +16,8 @@ class TrainPipeline:
     def __init__(self, midi: MidiDataset, 
                  model, loss_fn, optimizer, 
                  validate = True, batch_size = 32, 
-                 train_thresh = 1000, scheduler = None):
+                 train_thresh = 1000, scheduler = None,
+                 grad_acc = 16):
         self.midi = midi
         self.model = model
         self.loss_fn = loss_fn
@@ -30,6 +31,7 @@ class TrainPipeline:
 
         self.loader = None 
         self.scheduler : torch.optim.lr_scheduler._LRScheduler = scheduler
+        self.grad_acc = grad_acc
 
     def unpack_batch(self, batch):
         b, attn, gt = batch
@@ -43,7 +45,8 @@ class TrainPipeline:
         return output_logits, notes_gt
 
     def train_one_epoch(self, epoch_index, tb_writer):
-        total_loss = 0
+        last_loss = 0
+        total_batches = len(self.loader)
 
         with tqdm(self.loader, unit="batch") as tepoch:
             for i, batch in enumerate(tepoch):
@@ -53,14 +56,15 @@ class TrainPipeline:
                     output_logits, notes_gt = self.unpack_batch(batch)
                     loss = self.loss_fn(output_logits, notes_gt)
 
+                loss /= self.grad_acc
                 loss.backward() 
 
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                
-                # Gather data and report
-                total_loss += loss.detach().item()
-                last_loss = loss.detach().item()
+                # Perform gradient accumulation
+                if (epoch_index + 1) % self.grad_acc == 0 or epoch_index + 1 == total_batches:
+                    # Gather data and report
+                    last_loss = loss.detach().item()
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
 
                 # Progress bar
                 tepoch.set_postfix({"train loss": f'{last_loss :.5f}'})

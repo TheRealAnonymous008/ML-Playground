@@ -15,7 +15,7 @@ VOCABULARY = { librosa.midi_to_note(i) : i  for i in range(0, NUM_MIDI_NOTES)}
 VOCABULARY["BOS"] = len(VOCABULARY)
 VOCABULARY["SEP"] = len(VOCABULARY)
 VOCABULARY["EOS"] = len(VOCABULARY)
-VOCABULARY["MASK"] = len(VOCABULARY)
+VOCABULARY["PAD"] = len(VOCABULARY)
 
 
 VELOCITY_VALUES = 128
@@ -77,7 +77,7 @@ class MidiDataset(Dataset):
             notes = np.pad(notes, 
                     [(0, pad_toks)],
                     mode='constant',
-                    constant_values=VOCABULARY['EOS']
+                    constant_values=VOCABULARY['PAD']
                     )
 
 
