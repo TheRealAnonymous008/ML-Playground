@@ -1,5 +1,5 @@
-from model import NoteComposeNet
-from dataset import MidiDataset
+from models.model import NoteComposeNet
+from data_split import MidiDataset
 from torch.utils.data import DataLoader
 
 import torch
@@ -10,13 +10,13 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
-import dataset
+import data_split
 
 class TrainPipeline: 
     def __init__(self, midi: MidiDataset, 
                  model, loss_fn, optimizer, 
                  validate = True, batch_size = 32, 
-                 train_thresh = 1000, scheduler = None,
+                 train_thresh = 64, scheduler = None,
                  grad_acc = 16):
         self.midi = midi
         self.model = model
@@ -46,7 +46,9 @@ class TrainPipeline:
 
     def train_one_epoch(self, epoch_index, tb_writer):
         last_loss = 0
+        total_loss = 0
         total_batches = len(self.loader)
+        gradient_updates = 0
 
         with tqdm(self.loader, unit="batch") as tepoch:
             for i, batch in enumerate(tepoch):
@@ -60,7 +62,6 @@ class TrainPipeline:
                 loss.backward() 
                 # Gather data and report
                 last_loss += loss.detach().item()
-
                 # Perform gradient accumulation
                 if (self.train_updates + 1) % self.grad_acc == 0 or self.train_updates + 1 == total_batches:
                     self.optimizer.step()
@@ -69,17 +70,19 @@ class TrainPipeline:
                     # Progress bar
                     tepoch.set_postfix({"train loss": f'{last_loss :.5f}'})
 
+                    total_loss += last_loss
                     last_loss = 0
+                    gradient_updates += 1
 
                 # Save intermediate checkpoints
                 self.train_updates += 1
-                if self.train_updates % self.train_thresh == 0:
+                if self.train_updates % (self.grad_acc * self.train_thresh) == 0:
                     self.train_idx += 1
                     self.train_updates = 0
                     
                     # Tensorboard scalars
                     tb_x = epoch_index * len(self.loader) + i + 1
-                    tb_writer.add_scalar('Loss/train', last_loss, tb_x)
+                    tb_writer.add_scalar('Loss/train', total_loss / (gradient_updates), tb_x)
 
                     # Save temporary model instance
                     model_path = 'checkpoints/temps/model_' + str(self.train_idx) 
@@ -88,7 +91,7 @@ class TrainPipeline:
         self.train_idx = 0
         self.train_updates = 0
         
-        return last_loss
+        return total_loss / gradient_updates
     
     def train(self, epochs):
         # Initializing in a separate cell so we can easily add more epochs to the same run
@@ -115,6 +118,11 @@ class TrainPipeline:
 
             if self.scheduler is not None: 
                 self.scheduler.step()
+
+            # Better to save the model first.
+            model_path = 'checkpoints/model_{}_{}'.format(timestamp, epoch_number)
+            torch.save(self.model.state_dict(), model_path)
+
             self.midi.set_validation()
             if self.validate:
                 running_vloss = 0.0
@@ -143,8 +151,5 @@ class TrainPipeline:
                                 { 'Training' : avg_loss, 'Validation' : avg_vloss },
                                 epoch_number + 1)
                 writer.flush()
-
-            model_path = 'checkpoints/model_{}_{}'.format(timestamp, epoch_number)
-            torch.save(self.model.state_dict(), model_path)
 
             epoch_number += 1

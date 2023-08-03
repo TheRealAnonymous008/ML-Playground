@@ -1,4 +1,4 @@
-from dataset import VOCABULARY
+from data_split import VOCABULARY
 import pretty_midi as pm
 import numpy as np 
 import pandas as pd
@@ -17,6 +17,7 @@ def bundle_events(midi : pm.PrettyMIDI, instrument : pm.Instrument):
     bundles = []
     i = 0
     notes_list = sorted(instrument.notes, key=lambda x: x.start)
+
     while i < len(notes_list):
         bundle = []  
 
@@ -114,14 +115,39 @@ def process_midi(path):
         np.array(instrument_times, dtype=object), \
         np.array(instrument_names, dtype=object)
 
-def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
+def process_midi_flattened(path):   
+    try: 
+        midi_file = pm.PrettyMIDI(path)
+    except: 
+        return None 
+    
+    midi_file.remove_invalid_notes()
+
+    instrument_notes = []
+    instrument_durations = []
+    instrument_velocities = []
+    instrument_times = []
+    instrument_names = []
+
+    piano_roll = midi_file.get_piano_roll()
+
+    return np.array(instrument_notes, dtype=object), \
+        np.array(instrument_durations, dtype=object), \
+        np.array(instrument_velocities, dtype=object), \
+        np.array(instrument_times, dtype=object), \
+        np.array(instrument_names, dtype=object)
+
+def make_dataset(midis, file_name: str, flat = False) -> pd.DataFrame:
     df = pd.DataFrame(columns=["name", "instrument", "notes", "durations", "velocities", "times"])
 
     with tqdm(midis, unit="files") as tfiles:
         for i, mid in enumerate(tfiles):
             tfiles.set_description("Processing Files...")
 
-            out = process_midi(mid,)
+            if not flat:
+                out = process_midi(mid,)
+            else: 
+                out = process_midi_flattened(mid)
 
             tfiles.set_postfix_str(mid)
 
@@ -129,16 +155,20 @@ def make_dataset(midis, file_name: str, verbose = False) -> pd.DataFrame:
                 tfiles.set_postfix_str(mid + "Skipping corrupted file...")
                 continue 
             
-            n, d, v, t, inst  = out
+            if not flat:
+                n, d, v, t, inst  = out
 
-            for i in range(0, len(n)):
-                if (len(n[i]) > 10): # Do not include entries with less than this many notes
-                    df.loc[len(df.index)] = [mid.split('/')[-1], 
-                                            inst[i],
-                                            n[i].tolist(), 
-                                            d[i].tolist(), 
-                                            v[i].tolist(),
-                                            t[i].tolist()]
+                for i in range(0, len(n)):
+                    if (len(n[i]) > 10): # Do not include entries with less than this many notes
+                        df.loc[len(df.index)] = [mid.split('/')[-1], 
+                                                inst[i],
+                                                n[i].tolist(), 
+                                                d[i].tolist(), 
+                                                v[i].tolist(),
+                                                t[i].tolist()]
+                        
+            else: 
+                events = out
 
     df.to_csv(file_name, index=False)
     return df

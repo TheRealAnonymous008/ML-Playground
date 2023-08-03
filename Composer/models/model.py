@@ -1,4 +1,4 @@
-from dataset import VOCABULARY
+from data_split import VOCABULARY
 import torch.nn as nn
 import numpy as np
 import torch
@@ -90,10 +90,9 @@ class NoteComposeNet(nn.Module):
         for i in range(0, max_len):
             toks = torch.tensor([input_toks], device=self._device)
 
-            output_logits = self.forward(toks, temperature=temperature)
-            output_logits = output_logits.cpu().detach().numpy()
-            
+            output_logits = self.forward(toks)            
             output_logits = torch.softmax(output_logits / temperature, 1)
+            output_logits = output_logits.cpu().detach().numpy()
             
             output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
             outputs.append(output_tok.item())
