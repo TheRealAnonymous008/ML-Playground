@@ -1,5 +1,5 @@
 from models.model import NoteComposeNet
-from data_split import MidiDataset
+from models.data_split import MidiDataset
 from torch.utils.data import DataLoader
 
 import torch
