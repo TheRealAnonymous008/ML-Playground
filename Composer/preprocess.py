@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore")
 def bundle_events(midi : pm.PrettyMIDI, instrument : pm.Instrument):
     bundles = []
     i = 0
-    notes_list = sorted(instrument.notes, key=lambda x: x.start)
+    notes_list = sorted(instrument.notes, key=lambda x: (x.start, x.end))
 
     while i < len(notes_list):
         bundle = []  
@@ -28,8 +28,8 @@ def bundle_events(midi : pm.PrettyMIDI, instrument : pm.Instrument):
             if len(bundle) == 0:
                 bundle.append(note)
                 bnote = note 
-            elif math.isclose(midi.time_to_tick(note.start), midi.time_to_tick(bnote.start), rel_tol=1e-5) and \
-                math.isclose(midi.time_to_tick(note.end), midi.time_to_tick(bnote.end), rel_tol=1e-5):
+            elif math.isclose(midi.time_to_tick(note.start), midi.time_to_tick(bnote.start), rel_tol=1e-7) and \
+                math.isclose(midi.time_to_tick(note.end), midi.time_to_tick(bnote.end), rel_tol=1e-7):
                 bundle.append(note)
             else: 
                 bundle = sorted(bundle, key = lambda x : x.pitch)
@@ -64,11 +64,15 @@ def create_lists(instrument):
             notes.append(x.pitch)
             velocities.append(int(x.velocity))
 
-        # Add the end of the last chord
-        notes.append(VOCABULARY["SEP"])
-        durations.append(b[0].duration)  # Note: Every duration bounded by each SEP is assumed to be the same
-        velocities.append(0)
-        times.append(b[0].start - current_time ) # Append the delta time
+
+
+        if not (math.isclose(b[0].start, current_time, rel_tol=1e-7)):
+            notes.append(VOCABULARY["BEAT"])    # Add a special beat token whenever two groups have the same onset time
+            times.append(b[0].start - current_time ) # Append the delta time otherwise.
+        else: 
+            # Add the end of the last chord
+            notes.append(VOCABULARY["SEP"])
+            durations.append(b[0].duration)  # Note: Every duration bounded by each SEP is assumed to be the same
         
         current_time = b[0].start
 
@@ -174,7 +178,7 @@ def make_dataset(midis, file_name: str) -> pd.DataFrame:
             n, d, v, t, inst  = out
 
             for i in range(0, len(n)):
-                if (len(n[i]) > 10): # Do not include entries with less than this many notes
+                if (len(n[i]) > 100): # Do not include entries with less than this many notes
                     df.loc[len(df.index)] = [mid.split('/')[-1], 
                                             inst[i],
                                             n[i].tolist(), 

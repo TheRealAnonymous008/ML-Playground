@@ -10,8 +10,6 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
-import data_split
-
 class TrainPipeline: 
     def __init__(self, midi: MidiDataset, 
                  model, loss_fn, optimizer, 

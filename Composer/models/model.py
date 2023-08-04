@@ -1,7 +1,8 @@
-from data_split import VOCABULARY
 import torch.nn as nn
 import numpy as np
 import torch
+
+from .data_split import MidiDataset, VOCABULARY
 
 
 class Config:
