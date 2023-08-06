@@ -84,7 +84,7 @@ class NoteComposeNet(nn.Module):
     # Returns a number corresponding to the note generated.
     # Inputs are in array form
     @torch.no_grad()
-    def generate(self, inputs, max_len = 10, temperature = 1.0, top_p = -1):
+    def generate(self, inputs, max_len = 10, temperature = 1.0, top_p = -1, prior_notes = None):
         assert top_p <= 1.0
 
         input_toks = inputs[:self._context_len]
@@ -111,6 +111,10 @@ class NoteComposeNet(nn.Module):
             
             output_logits[last_tok] = 0
 
+            # Apply priors 
+            if prior_notes is not None: 
+                output_logits *= prior_notes
+                
             # Normalize
             sum_logits = sum(output_logits)
             output_logits /= sum_logits
