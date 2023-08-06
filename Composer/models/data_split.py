@@ -22,7 +22,7 @@ VOCABULARY["PAD"] = len(VOCABULARY)
 VELOCITY_VALUES = 128
 
 class MidiDataset(Dataset):
-    def __init__(self, df : pd.DataFrame, context_len, train_samples = 16, validate_samples = 4, start_length = -1):
+    def __init__(self, df : pd.DataFrame, context_len, train_samples = 1e5, validate_samples = 1e4, start_length = -1):
         df['notes'] = df.notes.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.isnumeric()])
         df['velocities'] = df.velocities.apply(lambda x: [int(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.isnumeric()])
         df['durations'] = df.durations.apply(lambda x: [float(y) for y in str(x).removeprefix('[').removesuffix(']').split(', ') if y.replace('.', '').replace('e+', '').replace('e-','').isnumeric()])
@@ -38,7 +38,7 @@ class MidiDataset(Dataset):
 
         self.context_len = context_len
 
-        self._samples_per_track = train_samples
+        self._samples = train_samples
         self._train_samples = train_samples
         self._validate_samples = validate_samples
 
@@ -50,16 +50,19 @@ class MidiDataset(Dataset):
             self._start_length = start_length
 
     def __len__(self):
-        return self._data_points * self._samples_per_track
+        return self._samples
 
     def __getitem__(self, idx):
-        note_slice = self.notes[idx // self._samples_per_track]
+        index = np.random.randint(0, self._data_points)
+        note_slice = self.notes[index]
         
         # Data Augmentation technique: Transpose the notes
         transpose_semitones = np.random.randint(-12, 13)  
         note_slice = self.transpose(note_slice, transpose_semitones)
 
-        length = np.random.randint(1, min(self._start_length, len(note_slice) - 1))
+        max_length = min(self._start_length, len(note_slice) - 1)
+        min_length = 1 
+        length = np.random.randint(min_length, max_length )
         offset = np.random.randint(0, len(note_slice) - length)
         gt_note = note_slice[offset + length]
         
@@ -110,7 +113,7 @@ class MidiDataset(Dataset):
         return logit.astype(float)
     
     def set_training(self):
-        self._samples_per_track = self._train_samples
+        self._samples = self._train_samples
 
     def set_validation(self):
-        self._samples_per_track = self._validate_samples
+        self._samples = self._validate_samples

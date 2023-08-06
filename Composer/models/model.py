@@ -2,7 +2,7 @@ import torch.nn as nn
 import numpy as np
 import torch
 
-from .data_split import MidiDataset, VOCABULARY
+from .data_split import MidiDataset, VOCABULARY, NUM_MIDI_NOTES
 
 
 class Config:
@@ -84,9 +84,15 @@ class NoteComposeNet(nn.Module):
     # Returns a number corresponding to the note generated.
     # Inputs are in array form
     @torch.no_grad()
-    def generate(self, inputs, max_len = 10, temperature = 1.0):
+    def generate(self, inputs, max_len = 10, temperature = 1.0, top_p = -1):
+        assert top_p <= 1.0
+
         input_toks = inputs[:self._context_len]
         outputs = []
+
+        last_tok = inputs[-1]
+
+        ALL_TOKS = [i for i in range(0, len(VOCABULARY))]
 
         for i in range(0, max_len):
             toks = torch.tensor([input_toks], device=self._device)
@@ -95,12 +101,42 @@ class NoteComposeNet(nn.Module):
             output_logits = torch.softmax(output_logits / temperature, 1)
             output_logits = output_logits.cpu().detach().numpy()
             
-            output_tok = torch.multinomial(torch.tensor(output_logits[0]), num_samples=1)
+            # Cheat a bit and sample only from the logits above the current token (assuming it's a note)
+            
+            output_logits = output_logits[0]
+            for i, logit in enumerate(output_logits):
+                # Follow the format of the tokens
+                if i < last_tok and last_tok < NUM_MIDI_NOTES:
+                    output_logits[i] = 0
+            
+            output_logits[last_tok] = 0
+
+            # Normalize
+            sum_logits = sum(output_logits)
+            output_logits /= sum_logits
+
+            # Perform top_p sampling if top_p = -1
+            if top_p > 0: 
+                indexes = sorted(ALL_TOKS, key=lambda x: output_logits[x])
+                low_p = 1.0 - top_p 
+
+                cum_p = 0.0
+                itr = 0
+
+                while True: 
+                    cum_p += output_logits[indexes[itr]]
+                    if cum_p >= low_p:
+                        break
+                    output_logits[indexes[itr]] = 0 
+                    itr += 1
+                
+                
+            output_tok = torch.multinomial(torch.tensor(output_logits), num_samples=1)
             outputs.append(output_tok.item())
+            last_tok = output_tok.item()
 
             input_toks = np.append(input_toks, output_tok)
             input_toks = input_toks[-self._context_len:]
-
         return outputs
     
     def detokenize(self, inputs):

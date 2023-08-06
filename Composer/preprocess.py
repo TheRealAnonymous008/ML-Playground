@@ -160,7 +160,7 @@ def process_midi(path):
         np.array(instrument_names, dtype=object)
 
 
-def make_dataset(midis, file_name: str) -> pd.DataFrame:
+def make_dataset(midis, file_name: str | None = None) -> pd.DataFrame:
     df = pd.DataFrame(columns=["name", "instrument", "notes", "durations", "velocities", "times"])
 
     with tqdm(midis, unit="files") as tfiles:
@@ -186,5 +186,7 @@ def make_dataset(midis, file_name: str) -> pd.DataFrame:
                                             v[i].tolist(),
                                             t[i].tolist()]
 
-    df.to_csv(file_name, index=False)
+    if file_name is not None:
+        df.to_csv(file_name, index=False)
+
     return df

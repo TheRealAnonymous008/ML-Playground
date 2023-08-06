@@ -15,7 +15,7 @@ class TrainPipeline:
                  model, loss_fn, optimizer, 
                  validate = True, batch_size = 32, 
                  train_thresh = 64, scheduler = None,
-                 grad_acc = 16):
+                 grad_acc = 16, grad_clip = 1.0):
         self.midi = midi
         self.model = model
         self.loss_fn = loss_fn
@@ -30,6 +30,7 @@ class TrainPipeline:
         self.loader = None 
         self.scheduler : torch.optim.lr_scheduler._LRScheduler = scheduler
         self.grad_acc = grad_acc
+        self.grad_clip = grad_clip
 
     def unpack_batch(self, batch):
         b, attn, gt = batch
@@ -62,11 +63,15 @@ class TrainPipeline:
                 last_loss += loss.detach().item()
                 # Perform gradient accumulation
                 if (self.train_updates + 1) % self.grad_acc == 0 or self.train_updates + 1 == total_batches:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
                     # Progress bar
-                    tepoch.set_postfix({"train loss": f'{last_loss :.5f}'})
+                    tepoch.set_postfix({"train loss": f'{last_loss :.5f}', "lr": f'{self.scheduler.get_last_lr()}'})
+
+                    if self.scheduler is not None: 
+                        self.scheduler.step()
 
                     total_loss += last_loss
                     last_loss = 0
@@ -103,7 +108,7 @@ class TrainPipeline:
             self.midi, 
             batch_size=self.batch_size,
             num_workers=2,
-            shuffle=True, 
+            shuffle=False,
             pin_memory=True,
             pin_memory_device= self.model._device
         )
@@ -113,9 +118,6 @@ class TrainPipeline:
             self.model.train(True)
             self.midi.set_training()
             avg_loss = self.train_one_epoch(epoch_number, writer)
-
-            if self.scheduler is not None: 
-                self.scheduler.step()
 
             # Better to save the model first.
             model_path = 'checkpoints/model_{}_{}'.format(timestamp, epoch_number)
