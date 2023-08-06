@@ -7,3 +7,4 @@
 
 Composer/runs/*
 Composer/checkpoints/*
+*.npy
