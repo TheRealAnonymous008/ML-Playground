@@ -43,22 +43,23 @@ class NoteComposeNet(nn.Module):
         causal_mask = nn.Transformer.generate_square_subsequent_mask(config.context_len, device=device)
         self.register_buffer("causal_mask", causal_mask)
         
-        self.note_branch = [
-            nn.TransformerEncoderLayer(
+        self.note_branch = torch.nn.ModuleList(
+            [nn.TransformerEncoderLayer(
                 d_model=config.note_embedding_dims,
                 nhead=8,
                 dim_feedforward=16, 
                 activation= torch.nn.functional.gelu,
                 device = device
             ) 
-            for _ in range(0, config.note_branch_layers)
-        ]
+            for _ in range(0, config.note_branch_layers)]
+        )
 
         self.note_linear = nn.Linear(16, len(VOCABULARY), device = device)
 
         self.to(device=device)
         self._device = device
         self._context_len = config.context_len
+
 
     # Dimensions of x are (Batches, Note Sequences)
     # Note Sequences MUST have size < context_len 
