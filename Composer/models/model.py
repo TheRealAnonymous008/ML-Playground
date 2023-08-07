@@ -9,7 +9,7 @@ class Config:
     def __init__(self):
         self.context_len = 2048
 
-        self.note_branch_layers = 16
+        self.note_branch_layers = 24
         self.velocity_branch_layers = 4
         self.duration_branch_layers = 4
         self.time_branch_layers = 4
@@ -47,14 +47,14 @@ class NoteComposeNet(nn.Module):
             [nn.TransformerEncoderLayer(
                 d_model=config.note_embedding_dims,
                 nhead=8,
-                dim_feedforward=16, 
+                dim_feedforward=config.note_embedding_dims, 
                 activation= torch.nn.functional.gelu,
                 device = device
             ) 
             for _ in range(0, config.note_branch_layers)]
         )
 
-        self.note_linear = nn.Linear(16, len(VOCABULARY), device = device)
+        self.note_linear = nn.Linear(config.note_embedding_dims, len(VOCABULARY), device = device)
 
         self.to(device=device)
         self._device = device
