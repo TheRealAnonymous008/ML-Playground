@@ -55,9 +55,6 @@ def create_lists(instrument):
 
     # Append beginning of sequence tok
     notes.append(VOCABULARY['BOS'])
-    durations.append(0)
-    velocities.append(0)
-    times.append(0)
 
     for i, b in enumerate(instrument):
         for x in b: 
@@ -67,6 +64,7 @@ def create_lists(instrument):
 
         if not (math.isclose(b[0].start, current_time, rel_tol=1e-7)):
             notes.append(VOCABULARY["BEAT"])    # Add a special beat token whenever two groups have the same onset time
+            durations.append(b[0].duration)     # Add the duration of the first group in the
             times.append(b[0].start - current_time ) # Append the delta time otherwise.
         else: 
             # Add the end of the last chord
@@ -84,7 +82,7 @@ def create_lists(instrument):
     return np.array(notes), np.array(durations), np.array(velocities), np.array(times)
 
 def normalize_to_beats(instrument_arr, ticks_per_beat):
-    return np.round(instrument_arr / ticks_per_beat, 4)
+    return np.round(instrument_arr / ticks_per_beat, 6)
 
 def remove_bad_tracks(midi : pm.PrettyMIDI):
     new_midi = pm.PrettyMIDI(resolution = midi.resolution)
