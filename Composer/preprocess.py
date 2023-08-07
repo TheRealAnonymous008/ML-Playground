@@ -65,7 +65,6 @@ def create_lists(instrument):
             velocities.append(int(x.velocity))
 
 
-
         if not (math.isclose(b[0].start, current_time, rel_tol=1e-7)):
             notes.append(VOCABULARY["BEAT"])    # Add a special beat token whenever two groups have the same onset time
             times.append(b[0].start - current_time ) # Append the delta time otherwise.
@@ -73,6 +72,7 @@ def create_lists(instrument):
             # Add the end of the last chord
             notes.append(VOCABULARY["SEP"])
             durations.append(b[0].duration)  # Note: Every duration bounded by each SEP is assumed to be the same
+
         
         current_time = b[0].start
 
