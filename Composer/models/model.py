@@ -9,7 +9,7 @@ class Config:
     def __init__(self):
         self.context_len = 2048
 
-        self.note_branch_layers = 24
+        self.note_branch_layers = 16
         self.velocity_branch_layers = 4
         self.duration_branch_layers = 4
         self.time_branch_layers = 4
@@ -85,7 +85,7 @@ class NoteComposeNet(nn.Module):
     # Returns a number corresponding to the note generated.
     # Inputs are in array form
     @torch.no_grad()
-    def generate(self, inputs, max_len = 10, temperature = 1.0, top_p = -1, prior_notes = None):
+    def generate(self, inputs, max_len = 10, temperature = 1.0, top_p = -1, prior_notes = None, prior_weight = 1.0):
         assert top_p <= 1.0
 
         input_toks = inputs[:self._context_len]
@@ -95,10 +95,17 @@ class NoteComposeNet(nn.Module):
 
         ALL_TOKS = [i for i in range(0, len(VOCABULARY))]
 
+        if prior_notes is not None: 
+            prior_logits_tensor = torch.tensor(prior_notes * prior_weight, device=self._device)
+
         for i in range(0, max_len):
             toks = torch.tensor([input_toks], device=self._device)
 
-            output_logits = self.forward(toks)            
+            output_logits = self.forward(toks)     
+            # Apply priors 
+            if prior_notes is not None: 
+                output_logits += prior_logits_tensor
+
             output_logits = torch.softmax(output_logits / temperature, 1)
             output_logits = output_logits.cpu().detach().numpy()
             
@@ -111,16 +118,12 @@ class NoteComposeNet(nn.Module):
                     output_logits[i] = 0
             
             output_logits[last_tok] = 0
-
-            # Apply priors 
-            if prior_notes is not None: 
-                output_logits *= prior_notes
                 
             # Normalize
             sum_logits = sum(output_logits)
             output_logits /= sum_logits
 
-            # Perform top_p sampling if top_p = -1
+            # Perform top_p sampling if top_p != -1
             if top_p > 0: 
                 indexes = sorted(ALL_TOKS, key=lambda x: output_logits[x])
                 low_p = 1.0 - top_p 
