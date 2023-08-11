@@ -1,5 +1,4 @@
 
-*.mid
 *.pyc
 *.wav
 *.csv
@@ -7,4 +6,5 @@
 
 Composer/runs/*
 Composer/checkpoints/*
-*.npy
+Composer/data/* 
+Composer/datasets/*

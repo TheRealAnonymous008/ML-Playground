@@ -92,7 +92,7 @@ class MidiDataset(Dataset):
 
         # The expected outputs
         gt = {
-            "notes": self.make_note_logit(gt_note)
+            "notes": np.array(gt_note, dtype=np.int64)
         }
         return sample, attn_idx, gt
     
