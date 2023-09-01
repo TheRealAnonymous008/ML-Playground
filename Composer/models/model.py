@@ -7,7 +7,7 @@ from .data_split import MidiDataset, VOCABULARY, NUM_MIDI_NOTES
 
 class Config:
     def __init__(self):
-        self.context_len = 2048
+        self.context_len = 256
 
         self.note_branch_layers = 16
         self.velocity_branch_layers = 4
