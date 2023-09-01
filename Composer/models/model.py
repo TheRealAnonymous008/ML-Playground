@@ -108,7 +108,7 @@ class NoteComposeNet(nn.Module):
                 output_logits += prior_logits_tensor
 
             output_logits = torch.softmax(output_logits / temperature, 1)
-            output_logits = output_logits.cpu().detach().numpy())
+            output_logits = output_logits.cpu().detach().numpy()
             
             # Cheat a bit and sample only from the logits above the current token (assuming it's a note)
             
