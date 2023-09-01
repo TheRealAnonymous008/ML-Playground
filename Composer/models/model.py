@@ -14,7 +14,7 @@ class Config:
         self.duration_branch_layers = 4
         self.time_branch_layers = 4
 
-        self.note_embedding_dims = 16
+        self.note_embedding_dims = 16 # Potentially change this to 48
         self.velocity_embedding_dims = 8
 
 class DiscreteEmbedding(nn.Module):
@@ -101,13 +101,14 @@ class NoteComposeNet(nn.Module):
         for i in range(0, max_len):
             toks = torch.tensor([input_toks], device=self._device)
 
-            output_logits = self.forward(toks)     
+            output_logits = self.forward(toks)
+
             # Apply priors 
             if prior_notes is not None: 
                 output_logits += prior_logits_tensor
 
             output_logits = torch.softmax(output_logits / temperature, 1)
-            output_logits = output_logits.cpu().detach().numpy()
+            output_logits = output_logits.cpu().detach().numpy())
             
             # Cheat a bit and sample only from the logits above the current token (assuming it's a note)
             
