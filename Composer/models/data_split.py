@@ -60,9 +60,9 @@ class MidiDataset(Dataset):
         transpose_semitones = np.random.randint(-12, 13)  
         note_slice = self.transpose(note_slice, transpose_semitones)
 
-        max_length = min(self._start_length, len(note_slice) - 1)
-        min_length = 1 
-        length = np.random.randint(min_length, max_length )
+        # max_length = min(self._start_length, len(note_slice) - 1)
+        # min_length = self._start_length
+        length = self._start_length
         offset = np.random.randint(0, len(note_slice) - length)
         gt_note = note_slice[offset + length]
         

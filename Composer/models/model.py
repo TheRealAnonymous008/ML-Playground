@@ -4,6 +4,8 @@ import torch
 
 from .data_split import MidiDataset, VOCABULARY, NUM_MIDI_NOTES
 
+# TODO: An alternative approach to this model would be to encode based on semitones rather than the entire 128 
+# notes of MIDI. The limitations of this are that we can no longer encode chords.
 
 class Config:
     def __init__(self):
@@ -100,7 +102,7 @@ class NoteComposeNet(nn.Module):
 
         for i in range(0, max_len):
             toks = torch.tensor([input_toks], device=self._device)
-
+            
             output_logits = self.forward(toks)
 
             # Apply priors 
