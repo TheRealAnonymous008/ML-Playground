@@ -1,0 +1,1 @@
+scrapy crawl %1 --nolog -O %1.json
