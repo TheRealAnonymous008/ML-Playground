@@ -12,7 +12,8 @@ class LangcrawlItem(scrapy.Item):
 # Note: Need to initialize name and start_url list in the subclasses. 
 class LangSpider(CrawlSpider):
     allowed_domains = ["en.wiktionary.org"]
-
+    t_name = None
+    
     rules = [ 
         Rule(
             LinkExtractor(
@@ -55,7 +56,7 @@ class LangSpider(CrawlSpider):
             item = LangcrawlItem()
             item["word"] = response.xpath('//title/text()').extract()[0].removesuffix("- Wiktionary, the free dictionary").strip().lower()
             
-            responses =response.xpath(f'//h2/span[@class="mw-headline"]/text() | //span[@class="IPA"]/text()').extract()
+            responses =response.xpath(f'//h2/span[@class="mw-headline"]/text() | //*[@class="IPA"]/text()').extract()
 
             filtered_responses = []
             # Extract only the responses in the language
@@ -67,11 +68,17 @@ class LangSpider(CrawlSpider):
                         filtered_responses.append(x)
                     else: 
                         break
-                    
-                if x == self.name:
-                    is_in_scope = True 
+                
+                if self.t_name is None: 
+                    if x == self.name:
+                        is_in_scope = True 
+                else: 
+                    if x == self.t_name:
+                        is_in_scope = True
 
-            # Seelct only the responses that correspond to the language.
-            item["pronunciation"] = ','.join(filtered_responses)
-            
-            yield item 
+            if len(filtered_responses) > 0:
+                # Selct only the responses that correspond to the language.
+                item["pronunciation"] = ','.join(filtered_responses)
+                yield item
+            else:
+                return 

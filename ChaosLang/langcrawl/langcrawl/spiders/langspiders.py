@@ -43,10 +43,6 @@ class BengaliSpider(LangSpider):
     name = "Bengali"
     start_urls = [get_default_link(name)]
 
-class BosnianSpider(LangSpider):
-    name = "Bosnian"
-    start_urls = [get_default_link(name)]
-
 class BulgarianSpider(LangSpider):
     name = "Bulgarian"
     start_urls = [get_default_link(name)]
@@ -67,10 +63,6 @@ class CebuanoSpider(LangSpider):
 
 class ChineseSpider(LangSpider):
     name = "Chinese"
-    start_urls = [get_default_link(name)]
-
-class CroatianSpider(LangSpider):
-    name = "Croatian"
     start_urls = [get_default_link(name)]
 
 class CorsicanSpider(LangSpider):
@@ -114,10 +106,6 @@ class FinnishSpider(LangSpider):
 class FrenchSpider(LangSpider):
     name = "French"
     start_urls = [get_default_link(name)]
-    
-class Frisian(LangSpider):
-    name = "Frisian"
-    start_urls = [get_default_link(name)]
 
 # ==============================================
 
@@ -145,6 +133,7 @@ class GujaratiSpider(LangSpider):
 
 class HaitianCreoleSpider(LangSpider):
     name = "Haitian_Creole"
+    t_name = "Haitian Creole"
     start_urls = [get_default_link(name)]
 
 class HausaSpider(LangSpider):
@@ -217,16 +206,8 @@ class KhmerSpider(LangSpider):
     name = "Khmer"
     start_urls = [get_default_link(name)]
 
-class KinyarwandaSpider(LangSpider):
-    name = "Kinyarwanda"
-    start_urls = [get_default_link(name)]
-
 class KoreanSpider(LangSpider):
     name = "Korean"
-    start_urls = [get_default_link(name)]
-
-class KurdishSpider(LangSpider):
-    name = "Kurdish"
     start_urls = [get_default_link(name)]
 
 class KyrgyzSpider(LangSpider):
@@ -235,8 +216,8 @@ class KyrgyzSpider(LangSpider):
 
 # ==============================================
 
-class Laothian(LangSpider):
-    name = "Laothian"
+class LaoSpider(LangSpider):
+    name = "Lao"
     start_urls = [get_default_link(name)]
 
 class LatinSpider(LangSpider):
@@ -268,10 +249,6 @@ class MalagasySpider(LangSpider):
 class MalaySpider(LangSpider):
     name = "Malay"
     start_urls = [get_default_link(name)]
-
-class MalaysianSpider(LangSpider):
-    name = "Malaysian"
-    start_urls = [get_default_link(name)]
     
 class MalteseSpider(LangSpider):
     name = "Maltese"
@@ -293,6 +270,11 @@ class MongolianSpider(LangSpider):
 
 class NepaliSpider(LangSpider):
     name = "Nepali"
+    start_urls = [get_default_link(name)]
+
+class NorthernKurdishSpider(LangSpider):
+    name = "Northern_Kurdish"
+    t_name = "Northern Kurdish"
     start_urls = [get_default_link(name)]
 
 class NorwegianSpider(LangSpider):
@@ -345,14 +327,15 @@ class SamoanSpider(LangSpider):
 
 class ScottishGaelicSpider(LangSpider):
     name = "Scottish_Gaelic"
+    t_name = "Scottish Gaelic"
     start_urls = [get_default_link(name)]
 
 class SerbianSpider(LangSpider):
     name = "Serbian"
     start_urls = [get_default_link(name)]
 
-class SesothoSpider(LangSpider):
-    name = "Sesotho"
+class SerboCroatianSpider(LangSpider):
+    name = "Serbo-Croatian"
     start_urls = [get_default_link(name)]
 
 class ShonaSpider(LangSpider):
@@ -373,6 +356,10 @@ class SlovenianSpider(LangSpider):
 
 class SomaliSpider(LangSpider):
     name = "Somali"
+    start_urls = [get_default_link(name)]
+
+class SothoSpider(LangSpider):
+    name = "Sotho"
     start_urls = [get_default_link(name)]
 
 class SpanishSpider(LangSpider):
@@ -459,6 +446,12 @@ class WelshSpider(LangSpider):
     name = "Welsh"
     start_urls = [get_default_link(name)]
 
+    
+class WestFrisianSpider(LangSpider):
+    name = "West_Frisian"
+    start_urls = [get_default_link(name)]
+
+
 class WolofSpider(LangSpider):
     name = "Wolof"
     start_urls = [get_default_link(name)]
@@ -486,3 +479,48 @@ class ZuluSpider(LangSpider):
     start_urls = [get_default_link(name)]
     
 # ==============================================
+
+
+# ==== BATCH 2 ==== #
+
+class AbkhazSpider(LangSpider):
+    name = "Abkhaz"
+    start_urls = [get_default_link(name)]
+
+class CentralAtlasTamazightSpider(LangSpider):
+    name = "Central_Atlas_Tamazight"
+    t_name = "Central Atlas Tamazight"
+    start_urls = ["https://en.wiktionary.org/wiki/Category:Central_Atlas_Tamazight_terms_with_IPA_pronunciation"]
+    
+class ChichewaSpider(LangSpider):
+    name = "Chichewa"
+    start_urls = [get_default_link(name)]
+    
+class CopticSpider(LangSpider):
+    name = "Coptic"
+    start_urls = [get_default_link(name)]
+    
+class DhivehiSpider(LangSpider):
+    name = "Dhivehi"
+    start_urls = [get_default_link(name)]
+    
+class EgyptianArabicSpider(LangSpider):
+    name = "Egyptian_Arabic"
+    t_name = "Egyptian Arabic"
+    start_urls = ["https://en.wiktionary.org/wiki/Category:Egyptian_Arabic_terms_with_IPA_pronunciation"]
+
+class FijianSpider(LangSpider):
+    name = "Fijian"
+    start_urls = [get_default_link(name)]
+
+class QuechuaSpider(LangSpider):
+    name = "Quechua"
+    start_urls = [get_default_link(name)]
+
+class TonguanSpider(LangSpider):
+    name = "Tonguan"
+    start_urls = [get_default_link(name)]
+
+class TswanaSpider(LangSpider):
+    name = "Tswana"
+    start_urls = [get_default_link(name)]
