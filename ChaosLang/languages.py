@@ -97,12 +97,11 @@ LANGUAGES = [
 
     "Samoan",
     "Scottish_Gaelic",
-    "Serbian",
     "Serbo-Croatian",
     "Shona",
     "Sinhalese",
     "Slovak",
-    "Slovenian",
+    "Slovene",
     "Somali",
     "Sotho",
     "Spanish",
@@ -117,12 +116,12 @@ LANGUAGES = [
     "Telugu",
     "Thai",
     "Tibetan",
-    "Tonguan",
+    "Tongan",
     "Tswana",
     "Turkish",
     "Turkmen",
     
-    "Ukranian"
+    "Ukrainian"
     "Urdu",
     "Uyghur",
     "Uzbek",

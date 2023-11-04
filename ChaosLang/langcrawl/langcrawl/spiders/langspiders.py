@@ -330,10 +330,6 @@ class ScottishGaelicSpider(LangSpider):
     t_name = "Scottish Gaelic"
     start_urls = [get_default_link(name)]
 
-class SerbianSpider(LangSpider):
-    name = "Serbian"
-    start_urls = [get_default_link(name)]
-
 class SerboCroatianSpider(LangSpider):
     name = "Serbo-Croatian"
     start_urls = [get_default_link(name)]
@@ -350,8 +346,8 @@ class SlovakSpider(LangSpider):
     name = "Slovak"
     start_urls = [get_default_link(name)]
 
-class SlovenianSpider(LangSpider):
-    name = "Slovenian"
+class SloveneSpider(LangSpider):
+    name = "Slovene"
     start_urls = [get_default_link(name)]
 
 class SomaliSpider(LangSpider):
@@ -418,8 +414,8 @@ class TurkmenSpider(LangSpider):
     
 # ==============================================
 
-class UkranianSpider(LangSpider):
-    name = "Ukranian"
+class UkrainianSpider(LangSpider):
+    name = "Ukrainian"
     start_urls = [get_default_link(name)]
 
 class UrduSpider(LangSpider):
@@ -517,8 +513,8 @@ class QuechuaSpider(LangSpider):
     name = "Quechua"
     start_urls = [get_default_link(name)]
 
-class TonguanSpider(LangSpider):
-    name = "Tonguan"
+class TonganSpider(LangSpider):
+    name = "Tongan"
     start_urls = [get_default_link(name)]
 
 class TswanaSpider(LangSpider):
