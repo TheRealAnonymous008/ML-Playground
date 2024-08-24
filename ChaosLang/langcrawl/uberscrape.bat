@@ -1,6 +1,5 @@
 for %%x in (
-    Tongan,
-    Ukrainian
+    West_Frisian
 ) do (
     scrape %%x
 )

@@ -42,7 +42,7 @@ LANGUAGES = [
     "Greek",
     "Gujarati",
 
-    "Haitian_Creaole",
+    "Haitian_Creole",
     "Hausa",
     "Hawaiian",
     "Hebrew",
@@ -53,7 +53,7 @@ LANGUAGES = [
     "Igbo",
     "Indonesian",
     "Irish",
-    "Italian"
+    "Italian",
 
     "Japanese",
     "Javanese",
@@ -66,7 +66,7 @@ LANGUAGES = [
 
     "Lao",
     "Latin",
-    "Latvian"
+    "Latvian",
     "Lithuanian",
     "Luxembourgish",
 
@@ -79,9 +79,8 @@ LANGUAGES = [
     "Mongolian",
 
     "Nepali",
-    "Northern Kurdish",
+    "Northern_Kurdish",
     "Norwegian",
-    "Nyanja",
 
     "Oriya",
     
@@ -105,7 +104,6 @@ LANGUAGES = [
     "Somali",
     "Sotho",
     "Spanish",
-    "Sundanese",
     "Swahili",
     "Swedish",
 
@@ -121,7 +119,7 @@ LANGUAGES = [
     "Turkish",
     "Turkmen",
     
-    "Ukrainian"
+    "Ukrainian",
     "Urdu",
     "Uyghur",
     "Uzbek",
@@ -129,7 +127,6 @@ LANGUAGES = [
     "Vietnamese",
     
     "Welsh", 
-    "West_Frisian",
     "Wolof",
 
     "Xhosa",
@@ -137,5 +134,5 @@ LANGUAGES = [
     "Yiddish",
     "Yoruba",
 
-    "Zulu",
+    "Zulu"
 ]
