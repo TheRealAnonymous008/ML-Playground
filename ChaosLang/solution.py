@@ -142,26 +142,42 @@ import torch
 import torch.nn as nn 
 from torch.utils.data import DataLoader, Dataset
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout = 0.1, max_len = 100):
+        super().__init__()
+        self.dropout = nn.Dropout(p = dropout)
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype = torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:,0::2] = torch.sin(position * div_term)
+        pe[:,1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
+
 class PhoneticTransformer(nn.Module):
-    def __init__(self, vocab_size, d_model = 16, n_head = 4, n_decoders = 4, d_feedforward = 512, max_seq_len = 100):
+    def __init__(self, vocab_size, d_model = 64, n_head = 8, n_decoders = 4, d_feedforward = 512, max_seq_len = 100):
         super().__init__()
 
         self.embedding = nn.Embedding(vocab_size, d_model)
-        self.positional_encoding = nn.Parameter(torch.zeros(1, max_seq_len, d_model))
+        self.positional_encoding = PositionalEncoding(d_model, max_len=max_seq_len)
 
-        self.transformer = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model = d_model, nhead = n_head, dim_feedforward= d_feedforward, batch_first=True, dropout=0.3),
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model = d_model, nhead = n_head, dim_feedforward= d_feedforward),
             num_layers= n_decoders,
         )
         self.fc_out = nn.Linear(d_model, vocab_size)
 
-    def forward(self, tgt, memory = None, tgt_mask = None, tgt_key_padding_mask = None):
-        tgt_embedded = self.embedding(tgt) + self.positional_encoding[:, :tgt.size(1), :] 
-        transformer_output = self.transformer(
-            tgt = tgt_embedded, 
-            memory = memory if memory is not None else tgt_embedded,
-            tgt_mask = tgt_mask,
-            tgt_key_padding_mask = tgt_key_padding_mask
+    def forward(self, tgt, tgt_mask = None):
+        tgt_embedded = self.embedding(tgt).permute(1, 0, 2) 
+        tgt_embedded = self.positional_encoding.forward(tgt_embedded) 
+        transformer_output = self.transformer.forward(
+            src=tgt_embedded,
+            mask = tgt_mask,
+            is_causal=True
         )
         output = self.fc_out(transformer_output)
         return output
