@@ -148,47 +148,6 @@ class CharacterTokenizer(PreTrainedTokenizer):
 import torch 
 import torch.nn as nn 
 from torch.utils.data import DataLoader, Dataset
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout = 0.1, max_len = 100):
-        super().__init__()
-        self.dropout = nn.Dropout(p = dropout)
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype = torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
-        pe[:,0::2] = torch.sin(position * div_term)
-        pe[:,1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pe", pe)
-
-    def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
-
-class PhoneticTransformer(nn.Module):
-    def __init__(self, vocab_size, d_model = 64, n_head = 8, n_decoders = 4, d_feedforward = 512, max_seq_len = 100):
-        super().__init__()
-
-        self.embedding = nn.Embedding(vocab_size, d_model)
-        self.positional_encoding = PositionalEncoding(d_model, max_len=max_seq_len)
-
-        self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model = d_model, nhead = n_head, dim_feedforward= d_feedforward),
-            num_layers= n_decoders,
-        )
-        self.fc_out = nn.Linear(d_model, vocab_size)
-
-    def forward(self, tgt, tgt_mask = None):
-        tgt_embedded = self.embedding(tgt).permute(1, 0, 2) 
-        tgt_embedded = self.positional_encoding.forward(tgt_embedded) 
-        transformer_output = self.transformer.forward(
-            src=tgt_embedded,
-            mask = tgt_mask,
-            is_causal=True
-        )
-        output = self.fc_out(transformer_output)
-        return output
-    
 def generate_square_subsequent_mask(sz):
     mask = torch.triu(torch.ones(sz, sz)) == 1
     mask = mask.transpose(0, 1)
@@ -196,10 +155,20 @@ def generate_square_subsequent_mask(sz):
     return mask
 
 class PhoneticsDataset(Dataset):
-    def __init__(self, encodings, vocab : dict, max_seq_Len = 100):
-        self.encodings = encodings
+    def __init__(self, data : pd.DataFrame, tokenizer : Tokenizer, max_seq_Len, languages : dict):
         self.max_seq_len = max_seq_Len
-        self.pad_idx = vocab.get("[PAD]")
+        self.pad_idx = tokenizer.get_vocab().get("[PAD]")
+        
+        self.data = data
+        self.encodings = []
+        self.languages = []
+        self.language_dict = {}
+        for x in languages.keys():
+            self.language_dict[x] = len(self.language_dict)
+
+        for i, row in data.iterrows():
+            self.encodings.append(tokenizer.encode(str(row["pronunciation"])).ids)
+            self.languages.append(self.language_dict[row["language"]])
 
     def __len__(self):
         return len(self.encodings)
@@ -215,5 +184,78 @@ class PhoneticsDataset(Dataset):
 
         input_ids = torch.tensor(input_ids, dtype = torch.long)
         target = torch.tensor(target_ids, dtype=torch.long)
+        lang_id = torch.tensor(self.languages[idx], dtype = torch.long)
 
-        return input_ids, target
+        return input_ids, target, lang_id
+    
+
+from transformers import GPT2LMHeadModel, GPT2Model, GPT2Config
+class PhoneticTransformer(nn.Module):
+    def __init__(self, vocab, seq_len, languages = {}):
+        super().__init__()
+        self.gpts = nn.ModuleList([GPT2LMHeadModel(GPT2Config(
+            vocab_size=len(vocab),
+            n_positions=seq_len,
+            n_embd=72,
+            n_layer = 4, 
+            n_head = 4, 
+            bos_token_id=vocab["[BOS]"],
+            eos_token_id=vocab["[EOS]"],
+            
+        )) for _ in range(len(languages))])
+
+        self.device = "cpu"
+        self.language_weights = []
+        self.set_language_weights(languages)
+
+
+    def set_language_weights(self, languages):
+        self.language_weights = list([torch.tensor(x) for x in languages.values()])
+
+    def forward(self, x, lang_id = None):
+        output_logits = []
+        for i, gpt in enumerate(self.gpts): 
+            gpt_out = gpt.forward(x)
+            if self.training: 
+                logit = gpt_out.logits
+                lang_mask = torch.eq(lang_id * torch.ones(lang_id.shape, device=self.device), torch.tensor(i, device =self.device))
+                mask = torch.ones(logit.shape).to(device=self.device) * torch.reshape(lang_mask, (-1, 1, 1)).to(device=self.device)
+                logit = logit * mask
+            else:
+                logit = self.language_weights[i] * gpt_out.logits
+            
+            output_logits.append(logit)
+
+        output = torch.stack(output_logits, dim = 0)
+        output = torch.sum(output, dim=0)
+        return output
+    
+    def generate(self,  
+        input_ids = [],
+        pad_token_id = None,
+        max_length= None, 
+        no_repeat_ngram_size=0,
+        do_sample = True,
+        top_k=50,
+        top_p=0.95,
+        temperature=1.0
+    ):
+        output = None 
+        for gpt in self.gpts:
+            output = gpt.generate(
+                input_ids, 
+                pad_token_id = pad_token_id,
+                max_length=max_length,  # Maximum length of the generated text
+                no_repeat_ngram_size=no_repeat_ngram_size,  # Prevent repetition
+                do_sample = do_sample,
+                top_k=top_k,  # Limits the sampling pool to top_k tokens
+                top_p=top_p,  # Cumulative probability for nucleus sampling
+                temperature=temperature,  # Adjust the randomness of predictions,
+                output_logits = True 
+            )
+        return output
+
+    def to_device(self, device):
+        self.to(device)
+        self.device = device
+        return self
