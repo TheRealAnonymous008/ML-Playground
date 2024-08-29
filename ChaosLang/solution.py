@@ -15,6 +15,9 @@ from typing import Dict, List, Optional, Sequence, Union
 
 from transformers.tokenization_utils import AddedToken, PreTrainedTokenizer
 
+class CharToks():
+    def __init__(self, ids):
+        self.ids = ids
 
 class CharacterTokenizer(PreTrainedTokenizer):
     def __init__(self, characters: Sequence[str], model_max_length: int, **kwargs):
@@ -35,8 +38,8 @@ class CharacterTokenizer(PreTrainedTokenizer):
             "[BOS]": 2,
             "[MASK]": 3,
             "[PAD]": 4,
-            "[RESERVED]": 5,
-            "[UNK]": 6,
+            "[UNK]": 5,
+            "[EOS]": 6,
             **{ch: i + 7 for i, ch in enumerate(characters)},
         }
         self._vocab_int_to_str = {v: k for k, v in self._vocab_str_to_int.items()}
@@ -63,6 +66,10 @@ class CharacterTokenizer(PreTrainedTokenizer):
 
     def _tokenize(self, text: str) -> List[str]:
         return list(text)
+    
+    def encode(self, text : str):
+        toks = [self.bos_token] + self._tokenize(text) + [self.eos_token]
+        return CharToks(self.convert_tokens_to_ids(toks))
 
     def _convert_token_to_id(self, token: str) -> int:
         return self._vocab_str_to_int.get(token, self._vocab_str_to_int["[UNK]"])
