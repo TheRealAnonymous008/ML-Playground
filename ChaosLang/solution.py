@@ -158,13 +158,7 @@ class LanguageDataset(Dataset):
     def __init__(self, data : pd.DataFrame, tokenizer : Tokenizer, max_seq_len):
         self.max_seq_len = max_seq_len
         self.pad_idx = tokenizer.get_vocab().get("[PAD]")
-        
-        self.data = data
-        self.encodings = []
-        self.language_dict = {}
-
-        for i, row in data.iterrows():
-            self.encodings.append(tokenizer.encode(str(row["pronunciation"])).ids)
+        self.encodings =  data["pronunciation"].apply(lambda x : list(x)).tolist()
 
     def __len__(self):
         return len(self.encodings)
@@ -206,7 +200,7 @@ class PhoneticTransformer(nn.Module):
         self.gpts = nn.ModuleList([GPT2LMHeadModel(GPT2Config(
             vocab_size=len(vocab),
             n_positions=seq_len,
-            n_embd=72,
+            n_embd=64,
             n_layer = 4, 
             n_head = 4, 
             bos_token_id=vocab["[BOS]"],
@@ -215,14 +209,21 @@ class PhoneticTransformer(nn.Module):
         )) for _ in range(len(languages))])
         self.device = "cpu"
         self.languages = list(languages.keys())
-        self.language_weights = []
+        self.language_weights = {}
         self.set_language_weights(languages)
 
+    def get_languages(self):
+        return list(self.language_weights.keys())
 
-    def set_language_weights(self, languages):
-        self.language_weights = [torch.tensor(x, dtype=torch.float32) for x in languages.values()]
-        total_weight = sum(self.language_weights)
-        self.language_weights = [weight / total_weight for weight in self.language_weights]
+    def set_language_weights(self, languages : dict[str, float]):
+        self.language_weights = {}.fromkeys(self.language_weights, 0)
+        for y in languages.keys(): 
+            self.language_weights[y] = languages[y] 
+
+        total_weight = sum(self.language_weights.values())
+
+        for y in self.language_weights.keys():
+            self.language_weights[y] = self.language_weights[y] / total_weight
 
     def get_language_gpt(self, language):
         return self.gpts[self.languages.index(language)]
@@ -239,6 +240,10 @@ class PhoneticTransformer(nn.Module):
         output = torch.sum(output, dim=0)
         return output
     
+    def prepare_for_gen(self):
+        for i, gpt in enumerate(self.gpts):
+            gpt.to("cpu")
+
     def generate(self,  
         input_ids = [],
         pad_token_id = None,
@@ -246,14 +251,31 @@ class PhoneticTransformer(nn.Module):
         do_sample = True,
         top_k=50,
         top_p=0.95,
-        temperature=1.0
+        language_temps : dict[str, float] | None =  None,
+        temperature = 1.0
     ):
         curr_seq : torch.Tensor = input_ids 
-
         while True: 
+            if (len(curr_seq[0]) >= self.max_len):
+                break 
             outputs= []
             for i, gpt in enumerate(self.gpts):
+
+                lang = self.languages[i]
+                if self.language_weights[lang] == 0: 
+                    continue
+
+
                 gpt : GPT2LMHeadModel = gpt
+                gpt.to(self.device)
+                if language_temps == None: 
+                    temp = temperature
+                else: 
+                    if self.languages[i] in language_temps:
+                        temp = language_temps[self.languages[i]]
+                    else: 
+                        temp = temperature
+
                 output = gpt.generate(
                     curr_seq, 
                     pad_token_id = pad_token_id,
@@ -262,17 +284,26 @@ class PhoneticTransformer(nn.Module):
                     do_sample = do_sample,
                     top_k=top_k,  # Limits the sampling pool to top_k tokens
                     top_p=top_p,  # Cumulative probability for nucleus sampling
-                    temperature=temperature,  # Adjust the randomness of predictions,
+                    temperature=temp,  # Adjust the randomness of predictions,
                     output_logits = True,
                     return_dict_in_generate= True
                 )
 
-                outputs.append(self.language_weights[i] * output.logits[0][0])
+                gpt.to("cpu")
+                logits = output.logits[0][0] / temp
+                # Define the indices to be removed
+                tokens_to_remove = [0, 1, 2, 3, 4, 5]
 
+                # Zero out the logits corresponding to the tokens to remove
+                for token_idx in tokens_to_remove:
+                    logits[token_idx] = float('-inf') 
+
+                
+                probs = self.language_weights[lang] *  nn.functional.softmax(logits, dim=-1)
+                outputs.append(probs)
             output = torch.stack(outputs, dim = 0)
-            next_token_scores = torch.sum(output, dim=0)
+            probs = torch.sum(output, dim=0)
             
-            probs = nn.functional.softmax(next_token_scores, dim=-1)
             next_token = torch.multinomial(probs, num_samples=1).unsqueeze(0)
 
             curr_seq = torch.concat([curr_seq, next_token], axis= 1)
@@ -283,8 +314,6 @@ class PhoneticTransformer(nn.Module):
                 if next_token == self.eos_token_id:
                     break 
 
-            if len(curr_seq) >= self.max_len:
-                break
 
 
         return curr_seq
