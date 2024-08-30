@@ -154,21 +154,17 @@ def generate_square_subsequent_mask(sz):
     mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
     return mask
 
-class PhoneticsDataset(Dataset):
-    def __init__(self, data : pd.DataFrame, tokenizer : Tokenizer, max_seq_Len, languages : dict):
-        self.max_seq_len = max_seq_Len
+class LanguageDataset(Dataset):
+    def __init__(self, data : pd.DataFrame, tokenizer : Tokenizer, max_seq_len):
+        self.max_seq_len = max_seq_len
         self.pad_idx = tokenizer.get_vocab().get("[PAD]")
         
         self.data = data
         self.encodings = []
-        self.languages = []
         self.language_dict = {}
-        for x in languages.keys():
-            self.language_dict[x] = len(self.language_dict)
 
         for i, row in data.iterrows():
             self.encodings.append(tokenizer.encode(str(row["pronunciation"])).ids)
-            self.languages.append(self.language_dict[row["language"]])
 
     def __len__(self):
         return len(self.encodings)
@@ -184,15 +180,29 @@ class PhoneticsDataset(Dataset):
 
         input_ids = torch.tensor(input_ids, dtype = torch.long)
         target = torch.tensor(target_ids, dtype=torch.long)
-        lang_id = torch.tensor(self.languages[idx], dtype = torch.long)
 
-        return input_ids, target, lang_id
+        return input_ids, target
     
+class PhoneticsDataset: 
+    def __init__(self, data : pd.DataFrame, tokenizer : Tokenizer, max_seq_len, batch_size : int):
+        self.datasets : dict[str, Dataset] = {}
+        self.dataloaders : dict[str, DataLoader]  = {}
+
+        for language in data["language"].value_counts().keys():
+            print("Loading", language)
+            self.datasets[language] = LanguageDataset(data[data["language"] == language], tokenizer, max_seq_len)
+            self.dataloaders[language] = DataLoader(self.datasets[language], batch_size, shuffle=True)
+
+    def get_data_loaders(self):
+        return self.dataloaders
 
 from transformers import GPT2LMHeadModel, GPT2Model, GPT2Config
 class PhoneticTransformer(nn.Module):
     def __init__(self, vocab, seq_len, languages = {}):
         super().__init__()
+        self.eos_token_id = vocab["[EOS]"]
+        self.max_len = seq_len
+
         self.gpts = nn.ModuleList([GPT2LMHeadModel(GPT2Config(
             vocab_size=len(vocab),
             n_positions=seq_len,
@@ -200,30 +210,29 @@ class PhoneticTransformer(nn.Module):
             n_layer = 4, 
             n_head = 4, 
             bos_token_id=vocab["[BOS]"],
-            eos_token_id=vocab["[EOS]"],
+            eos_token_id=vocab["[EOS]"], 
             
         )) for _ in range(len(languages))])
-
         self.device = "cpu"
+        self.languages = list(languages.keys())
         self.language_weights = []
         self.set_language_weights(languages)
 
 
     def set_language_weights(self, languages):
-        self.language_weights = list([torch.tensor(x) for x in languages.values()])
+        self.language_weights = [torch.tensor(x, dtype=torch.float32) for x in languages.values()]
+        total_weight = sum(self.language_weights)
+        self.language_weights = [weight / total_weight for weight in self.language_weights]
 
-    def forward(self, x, lang_id = None):
+    def get_language_gpt(self, language):
+        return self.gpts[self.languages.index(language)]
+
+    def forward(self, x):
         output_logits = []
         for i, gpt in enumerate(self.gpts): 
             gpt_out = gpt.forward(x)
-            if self.training: 
-                logit = gpt_out.logits
-                lang_mask = torch.eq(lang_id * torch.ones(lang_id.shape, device=self.device), torch.tensor(i, device =self.device))
-                mask = torch.ones(logit.shape).to(device=self.device) * torch.reshape(lang_mask, (-1, 1, 1)).to(device=self.device)
-                logit = logit * mask
-            else:
-                logit = self.language_weights[i] * gpt_out.logits
-            
+            logit = self.language_weights[i] * gpt_out.logits
+
             output_logits.append(logit)
 
         output = torch.stack(output_logits, dim = 0)
@@ -233,27 +242,52 @@ class PhoneticTransformer(nn.Module):
     def generate(self,  
         input_ids = [],
         pad_token_id = None,
-        max_length= None, 
         no_repeat_ngram_size=0,
         do_sample = True,
         top_k=50,
         top_p=0.95,
         temperature=1.0
     ):
-        output = None 
-        for gpt in self.gpts:
-            output = gpt.generate(
-                input_ids, 
-                pad_token_id = pad_token_id,
-                max_length=max_length,  # Maximum length of the generated text
-                no_repeat_ngram_size=no_repeat_ngram_size,  # Prevent repetition
-                do_sample = do_sample,
-                top_k=top_k,  # Limits the sampling pool to top_k tokens
-                top_p=top_p,  # Cumulative probability for nucleus sampling
-                temperature=temperature,  # Adjust the randomness of predictions,
-                output_logits = True 
-            )
-        return output
+        curr_seq : torch.Tensor = input_ids 
+
+        while True: 
+            outputs= []
+            for i, gpt in enumerate(self.gpts):
+                gpt : GPT2LMHeadModel = gpt
+                output = gpt.generate(
+                    curr_seq, 
+                    pad_token_id = pad_token_id,
+                    max_length=curr_seq.shape[1] + 1,  # Maximum length of the generated text
+                    no_repeat_ngram_size=no_repeat_ngram_size,  # Prevent repetition
+                    do_sample = do_sample,
+                    top_k=top_k,  # Limits the sampling pool to top_k tokens
+                    top_p=top_p,  # Cumulative probability for nucleus sampling
+                    temperature=temperature,  # Adjust the randomness of predictions,
+                    output_logits = True,
+                    return_dict_in_generate= True
+                )
+
+                outputs.append(self.language_weights[i] * output.logits[0][0])
+
+            output = torch.stack(outputs, dim = 0)
+            next_token_scores = torch.sum(output, dim=0)
+            
+            probs = nn.functional.softmax(next_token_scores, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1).unsqueeze(0)
+
+            curr_seq = torch.concat([curr_seq, next_token], axis= 1)
+            # finished sentences should have their next token be a padding token
+            if self.eos_token_id is not None:
+                if pad_token_id is None:
+                    raise ValueError("If `eos_token_id` is defined, make sure that `pad_token_id` is defined.")
+                if next_token == self.eos_token_id:
+                    break 
+
+            if len(curr_seq) >= self.max_len:
+                break
+
+
+        return curr_seq
 
     def to_device(self, device):
         self.to(device)
